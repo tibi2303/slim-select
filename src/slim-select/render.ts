@@ -63,7 +63,7 @@ export default class Render {
       el.setAttribute('role', 'status');
       el.setAttribute('aria-live', 'assertive');
       el.setAttribute('aria-atomic', 'true');
-      el.className = 'sr-only';
+      el.className = 'ss-sr-only';
       document.body.appendChild(el);
     }
     return el;
@@ -119,7 +119,7 @@ export default class Render {
       el.setAttribute('role', 'status');
       el.setAttribute('aria-live', 'polite');
       el.setAttribute('aria-atomic', 'true');
-      el.className = 'sr-only';
+      el.className = 'ss-sr-only';
       document.body.appendChild(el);
     }
     return el;
@@ -1131,6 +1131,13 @@ export default class Render {
     const fragment = document.createDocumentFragment()
     let count = 0; // counts only visible, enabled, non-placeholder items
 
+    const totalOptions = data.filter((d) =>
+      d instanceof Option &&
+      !d.placeholder &&
+      d.display &&
+      !d.disabled
+    ).length;
+
     const tagPos = (el: HTMLDivElement) => {
       // mirror the same visibility you use for aria-setsize (not placeholder, not disabled, not hidden)
       if (
@@ -1138,7 +1145,8 @@ export default class Render {
         !el.classList.contains(this.classes.disabled) &&
         !el.classList.contains(this.classes.hide)
       ) {
-        el.setAttribute('aria-posinset', String(++count))
+        el.setAttribute('aria-posinset', String(++count));
+        el.setAttribute('aria-setsize', String(totalOptions));
       }
     }
 
@@ -1331,7 +1339,6 @@ export default class Render {
     this.content.list.removeAttribute('aria-busy')
 
     const visibleCount = this.getOptions(true, true, true).length
-    this.content.list.setAttribute('aria-setsize', String(visibleCount))
 
     this._announcePolite(
       `${visibleCount} option${visibleCount === 1 ? '' : 's'} available`

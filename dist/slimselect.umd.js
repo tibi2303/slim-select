@@ -377,7 +377,7 @@
                 el.setAttribute('role', 'status');
                 el.setAttribute('aria-live', 'assertive');
                 el.setAttribute('aria-atomic', 'true');
-                el.className = 'sr-only';
+                el.className = 'ss-sr-only';
                 document.body.appendChild(el);
             }
             return el;
@@ -415,7 +415,7 @@
                 el.setAttribute('role', 'status');
                 el.setAttribute('aria-live', 'polite');
                 el.setAttribute('aria-atomic', 'true');
-                el.className = 'sr-only';
+                el.className = 'ss-sr-only';
                 document.body.appendChild(el);
             }
             return el;
@@ -1156,11 +1156,16 @@
             }
             const fragment = document.createDocumentFragment();
             let count = 0;
+            const totalOptions = data.filter((d) => d instanceof Option &&
+                !d.placeholder &&
+                d.display &&
+                !d.disabled).length;
             const tagPos = (el) => {
                 if (!el.classList.contains(this.classes.placeholder) &&
                     !el.classList.contains(this.classes.disabled) &&
                     !el.classList.contains(this.classes.hide)) {
                     el.setAttribute('aria-posinset', String(++count));
+                    el.setAttribute('aria-setsize', String(totalOptions));
                 }
             };
             for (const d of data) {
@@ -1291,7 +1296,6 @@
             this.content.list.appendChild(fragment);
             this.content.list.removeAttribute('aria-busy');
             const visibleCount = this.getOptions(true, true, true).length;
-            this.content.list.setAttribute('aria-setsize', String(visibleCount));
             this._announcePolite(`${visibleCount} option${visibleCount === 1 ? '' : 's'} available`);
         }
         option(option) {

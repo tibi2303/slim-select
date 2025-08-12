@@ -1372,12 +1372,16 @@ describe('render module', () => {
         ])
       )
 
-      expect(render.content.list.getAttribute('aria-setsize')).toBe('3')
+      const opts = render.getOptions(true, true, true);
+      expect(opts).toHaveLength(3);
+      expect(opts[0].getAttribute('aria-posinset')).toBe('1');
+      expect(opts[0].getAttribute('aria-setsize')).toBe('3');
 
-      const opts = render.getOptions(true, true, true)
-      expect(opts[0].getAttribute('aria-posinset')).toBe('1')
-      expect(opts[1].getAttribute('aria-posinset')).toBe('2')
-      expect(opts[2].getAttribute('aria-posinset')).toBe('3')
+      expect(opts[1].getAttribute('aria-posinset')).toBe('2');
+      expect(opts[1].getAttribute('aria-setsize')).toBe('3');
+
+      expect(opts[2].getAttribute('aria-posinset')).toBe('3');
+      expect(opts[2].getAttribute('aria-setsize')).toBe('3');
     })
 
 
