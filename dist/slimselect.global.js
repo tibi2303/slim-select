@@ -1303,7 +1303,6 @@ var SlimSelect = (function () {
                 return placeholder;
             }
             const optionEl = document.createElement('div');
-            optionEl.dataset.id = option.id;
             optionEl.id = `${this.settings.id}__opt__${option.id}`;
             optionEl.classList.add(this.classes.option);
             optionEl.setAttribute('role', 'option');

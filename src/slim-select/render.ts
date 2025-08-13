@@ -248,14 +248,12 @@ export default class Render {
       this.content.list.removeAttribute('aria-multiselectable');
     }
 
-    // Combobox AFTER list has an id
     this.main.main.setAttribute('role', 'combobox')
     this.main.main.setAttribute('aria-haspopup', 'listbox');
     this.main.main.setAttribute('aria-controls', this.content.list.id);
     this.main.main.setAttribute('aria-expanded', 'false');
     this.main.main.setAttribute('aria-autocomplete', 'list');
 
-    // Label logic
     if (this.settings.ariaLabelledBy && this.settings.ariaLabelledBy.trim()) {
       this.main.main.setAttribute('aria-labelledby', this.settings.ariaLabelledBy);
       this.main.main.removeAttribute('aria-label');
@@ -263,10 +261,8 @@ export default class Render {
       this.main.main.setAttribute('aria-label', this.settings.ariaLabel);
     }
 
-    // Relations
     this.main.main.setAttribute('aria-owns', this.content.list.id);
 
-    // Search input
     this.content.search.input.setAttribute('aria-controls', this.content.list.id);
     this.content.search.input.setAttribute('aria-autocomplete', 'list');
   }
@@ -1048,7 +1044,6 @@ export default class Render {
     const newly = options[dir === 'down' ? 0 : options.length - 1];
     newly.classList.add(this.classes.highlighted);
 
-    // ADD: set aria-activedescendant to the highlighted option's ID
     this.main.main.setAttribute('aria-activedescendant', newly.id);
 
     // Scroll to highlighted one
@@ -1105,7 +1100,6 @@ export default class Render {
       noResults.innerHTML = msg
       this.content.list.appendChild(noResults)
 
-      // Keep setsize accurate on empty state
       this.content.list.setAttribute('aria-setsize', '0')
       return
     }
@@ -1139,7 +1133,6 @@ export default class Render {
     ).length;
 
     const tagPos = (el: HTMLDivElement) => {
-      // mirror the same visibility you use for aria-setsize (not placeholder, not disabled, not hidden)
       if (
         !el.classList.contains(this.classes.placeholder) &&
         !el.classList.contains(this.classes.disabled) &&
@@ -1357,7 +1350,7 @@ export default class Render {
 
     // Create option
     const optionEl = document.createElement('div')
-    optionEl.dataset.id = option.id // Dataset id for identifying an option
+    // optionEl.dataset.id = option.id // Dataset id for identifying an option
     optionEl.id = `${this.settings.id}__opt__${option.id}`;
     optionEl.classList.add(this.classes.option)
     optionEl.setAttribute('role', 'option') // WCAG attribute
