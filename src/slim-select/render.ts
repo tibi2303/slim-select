@@ -244,27 +244,62 @@ export default class Render {
     this.content.list.setAttribute('aria-label', this.settings.contentAriaLabel);
     if (this.settings.isMultiple) {
       this.content.list.setAttribute('aria-multiselectable', 'true');
-    } else {
-      this.content.list.removeAttribute('aria-multiselectable');
     }
 
-    this.main.main.setAttribute('role', 'combobox')
+    this.main.main.setAttribute('role', 'combobox');
     this.main.main.setAttribute('aria-haspopup', 'listbox');
     this.main.main.setAttribute('aria-controls', this.content.list.id);
     this.main.main.setAttribute('aria-expanded', 'false');
     this.main.main.setAttribute('aria-autocomplete', 'list');
+    this.main.main.removeAttribute('aria-labelledby');
+    this.main.main.removeAttribute('aria-label');
 
-    if (this.settings.ariaLabelledBy && this.settings.ariaLabelledBy.trim()) {
-      this.main.main.setAttribute('aria-labelledby', this.settings.ariaLabelledBy);
-      this.main.main.removeAttribute('aria-label');
+    let labelledById = (this.settings.ariaLabelledBy || '').trim();
+    let labelEl: HTMLLabelElement | null = null;
+
+    if (!labelledById) {
+      const selectEl = document.querySelector(
+        `select[data-id="${this.settings.id}"]`
+      ) as HTMLSelectElement | null;
+
+      if (selectEl) {
+        if (selectEl.id) {
+          labelEl = document.querySelector(`label[for="${selectEl.id}"]`) as HTMLLabelElement | null;
+        }
+        if (!labelEl && selectEl.previousElementSibling?.tagName === 'LABEL') {
+          labelEl = selectEl.previousElementSibling as HTMLLabelElement;
+        }
+        if (labelEl) {
+          if (!labelEl.id) {
+            labelEl.id = (selectEl.id || this.settings.id) + '-label';
+          }
+          labelledById = labelEl.id;
+        }
+      }
+    } else {
+      labelEl = document.getElementById(labelledById) as HTMLLabelElement | null;
+    }
+
+    if (labelledById && document.getElementById(labelledById)) {
+      this.main.main.setAttribute('aria-labelledby', labelledById);
     } else if (this.settings.ariaLabel && this.settings.ariaLabel.trim()) {
-      this.main.main.setAttribute('aria-label', this.settings.ariaLabel);
+      this.main.main.setAttribute('aria-label', this.settings.ariaLabel.trim());
     }
 
     this.main.main.setAttribute('aria-owns', this.content.list.id);
 
     this.content.search.input.setAttribute('aria-controls', this.content.list.id);
     this.content.search.input.setAttribute('aria-autocomplete', 'list');
+
+    if (labelledById && document.getElementById(labelledById)) {
+      this.content.search.input.setAttribute('aria-labelledby', labelledById);
+    } else if (this.settings.searchLabelledBy && document.getElementById(this.settings.searchLabelledBy)) {
+      this.content.search.input.setAttribute('aria-labelledby', this.settings.searchLabelledBy);
+    } else if (this.settings.searchAriaLabel) {
+      this.content.search.input.setAttribute('aria-label', this.settings.searchAriaLabel);
+    } else {
+      this.content.search.input.setAttribute('aria-label', 'Search options');
+    }
   }
 
   public mainDiv(): Main {
@@ -1350,7 +1385,7 @@ export default class Render {
 
     // Create option
     const optionEl = document.createElement('div')
-    // optionEl.dataset.id = option.id // Dataset id for identifying an option
+    optionEl.dataset.id = option.id // Dataset id for identifying an option
     optionEl.id = `${this.settings.id}__opt__${option.id}`;
     optionEl.classList.add(this.classes.option)
     optionEl.setAttribute('role', 'option') // WCAG attribute

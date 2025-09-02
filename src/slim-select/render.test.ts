@@ -204,6 +204,7 @@ describe('render module', () => {
       expect(render.main.main.getAttribute('aria-expanded')).toBe('false')
       expect(render.content.list.getAttribute('role')).toBe('listbox')
       expect(render.content.list.getAttribute('aria-label')).toBe(render.settings.contentAriaLabel)
+      expect(render.main.main.hasAttribute('aria-label')).toBe(false)
     })
   })
 
@@ -212,7 +213,7 @@ describe('render module', () => {
       const main = render.main.main
 
       expect(main.id).toBe(render.settings.id + '-main')
-      expect(main.getAttribute('aria-label')).toBe(render.settings.ariaLabel)
+      expect(main.hasAttribute('aria-label')).toBe(false)
       expect(main.tabIndex).toBe(0)
       expect(main.children).toHaveLength(3)
       expect(main.children.item(0)?.className).toBe(render.classes.values)
@@ -1337,6 +1338,7 @@ describe('render module', () => {
       expect(live).toBeTruthy()
       expect(live.getAttribute('role')).toBe('status')
       expect(live.getAttribute('aria-live')).toBe('polite')
+      expect(live.getAttribute('aria-atomic')).toBe('true')
       expect(live.textContent).toBe('Searching…')
 
       ;(global as any).requestAnimationFrame = rafOrig
@@ -1356,6 +1358,7 @@ describe('render module', () => {
       expect(live).toBeTruthy()
       expect(live.getAttribute('role')).toBe('status')
       expect(live.getAttribute('aria-live')).toBe('assertive')
+      expect(live.getAttribute('aria-atomic')).toBe('true')
       expect(live.textContent).toBe('Something went wrong')
 
       ;(global as any).requestAnimationFrame = rafOrig

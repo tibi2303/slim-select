@@ -57,7 +57,7 @@ export default class Settings {
     this.alwaysOpen = settings.alwaysOpen !== undefined ? settings.alwaysOpen : false
     this.showSearch = settings.showSearch !== undefined ? settings.showSearch : true
     this.focusSearch = settings.focusSearch !== undefined ? settings.focusSearch : true
-    this.ariaLabel = settings.ariaLabel || 'Combobox'
+    this.ariaLabel = settings.ariaLabel || ''
     this.searchPlaceholder = settings.searchPlaceholder || 'Search'
     this.searchText = settings.searchText || 'No Results'
     this.searchingText = settings.searchingText || 'Searching...'
