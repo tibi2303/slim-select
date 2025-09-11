@@ -50,39 +50,42 @@ export default class Render {
   public settings: Settings
   public store: Store
   public callbacks: Callbacks
-  // Used to compute the range selection
   private lastSelectedOption: Option | null
-  private static _livePolite: HTMLDivElement | null = null;
-  private static _liveAssertive: HTMLDivElement | null = null;
+  private static _livePolite: HTMLDivElement | null = null
+  private static _liveAssertive: HTMLDivElement | null = null
 
   private static getLiveAssertive(): HTMLDivElement {
-    let el = document.getElementById('ss-live-assertive') as HTMLDivElement | null;
+    let el = document.getElementById('ss-live-assertive') as HTMLDivElement | null
     if (!el) {
-      el = document.createElement('div');
-      el.id = 'ss-live-assertive';
-      el.setAttribute('role', 'status');
-      el.setAttribute('aria-live', 'assertive');
-      el.setAttribute('aria-atomic', 'true');
-      el.className = 'ss-sr-only';
-      document.body.appendChild(el);
+      el = document.createElement('div')
+      el.id = 'ss-live-assertive'
+      el.setAttribute('role', 'status')
+      el.setAttribute('aria-live', 'assertive')
+      el.setAttribute('aria-atomic', 'true')
+      el.className = 'ss-sr-only'
+      document.body.appendChild(el)
     }
-    return el;
+    return el
   }
 
   private _announceAssertive(msg: string) {
-    const el = (Render._liveAssertive ||= Render.getLiveAssertive());
-    el.textContent = '';
-    requestAnimationFrame(() => { el.textContent = msg; });
+    const el = (Render._liveAssertive ||= Render.getLiveAssertive())
+    el.textContent = ''
+    requestAnimationFrame(() => { el.textContent = msg })
   }
 
-  // Elements
+  private clearHighlights(): void {
+    const highlighted = this.content.list.querySelectorAll('.' + this.classes.highlighted)
+    highlighted.forEach(el => el.classList.remove(this.classes.highlighted))
+    this.content.search.input.removeAttribute('aria-activedescendant')
+  }
+
   public main: Main
   public content: Content
 
-  private scrollHandler: (() => void) | undefined;
-  private resizeHandler: (() => void) | undefined;
+  private scrollHandler: (() => void) | undefined
+  private resizeHandler: (() => void) | undefined
 
-  // Classes
   public classes: CssClasses
 
   constructor(settings: Required<Settings>, classes: Required<CssClasses>, store: Store, callbacks: Callbacks) {
@@ -95,71 +98,57 @@ export default class Render {
     this.main = this.mainDiv()
     this.content = this.contentDiv()
 
-    // Add classes and styles to main/content
     this.updateClassStyles()
+    this.main.values.setAttribute('role', 'list')
     this.updateAriaAttributes()
 
-    // Add content to the content location settings or offcanvas-body if it exists
     const contentContainer = document
       .querySelector(`[data-id="${this.settings.id}"]`)
-      ?.closest('.offcanvas-body');
+      ?.closest('.offcanvas-body')
 
     if (contentContainer) {
-      contentContainer.appendChild(this.content.main);
+      contentContainer.appendChild(this.content.main)
     } else if (this.settings.contentLocation) {
-      this.settings.contentLocation.appendChild(this.content.main);
+      this.settings.contentLocation.appendChild(this.content.main)
     }
   }
 
   private static getLivePolite(): HTMLDivElement {
-    let el = document.getElementById('ss-live-polite') as HTMLDivElement | null;
+    let el = document.getElementById('ss-live-polite') as HTMLDivElement | null
     if (!el) {
-      el = document.createElement('div');
-      el.id = 'ss-live-polite';
-      el.setAttribute('role', 'status');
-      el.setAttribute('aria-live', 'polite');
-      el.setAttribute('aria-atomic', 'true');
-      el.className = 'ss-sr-only';
-      document.body.appendChild(el);
+      el = document.createElement('div')
+      el.id = 'ss-live-polite'
+      el.setAttribute('role', 'status')
+      el.setAttribute('aria-live', 'polite')
+      el.setAttribute('aria-atomic', 'true')
+      el.className = 'ss-sr-only'
+      document.body.appendChild(el)
     }
-    return el;
+    return el
   }
 
   private _announcePolite(msg: string) {
-    const el = (Render._livePolite ||= Render.getLivePolite());
-    el.textContent = '';
-    requestAnimationFrame(() => { el.textContent = msg; });
+    const el = (Render._livePolite ||= Render.getLivePolite())
+    el.textContent = ''
+    requestAnimationFrame(() => { el.textContent = msg })
   }
 
-  // Remove disabled classes
   public enable(): void {
-    // Remove disabled class
     this.main.main.classList.remove(this.classes.disabled)
-
-    // Set search input to "enabled"
     this.content.search.input.disabled = false
   }
 
-  // Set disabled classes
   public disable(): void {
-    // Add disabled class
     this.main.main.classList.add(this.classes.disabled)
-
-    // Set search input to disabled
     this.content.search.input.disabled = true
   }
 
   public open(): void {
     this.main.arrow.path.setAttribute('d', this.classes.arrowOpen)
-
-    // Add class to main container
     this.main.main.classList.add(this.settings.openPosition === 'up' ? this.classes.openAbove : this.classes.openBelow)
-    this.main.main.setAttribute('aria-expanded', 'true')
-
-    // move the content in to the right location
+    this.content.search.input.setAttribute('aria-expanded', 'true')
     this.moveContent()
 
-    // Move to last selected option
     const selectedOptions = this.store.getSelectedOptions()
     if (selectedOptions.length) {
       const selectedId = selectedOptions[selectedOptions.length - 1].id
@@ -168,38 +157,36 @@ export default class Render {
         this.ensureElementInView(this.content.list, selectedOption)
       }
     }
+
     if (this.settings.contentPosition === 'fixed') {
-      this.moveContent();
-
-      // Instant (non-debounced) handlers
-      this.scrollHandler = () => this.moveContent();
-      this.resizeHandler = () => this.moveContent();
-
-      window.addEventListener('scroll', this.scrollHandler, true); // capture phase
-      window.addEventListener('resize', this.resizeHandler);
+      this.moveContent()
+      this.scrollHandler = () => this.moveContent()
+      this.resizeHandler = () => this.moveContent()
+      window.addEventListener('scroll', this.scrollHandler, true)
+      window.addEventListener('resize', this.resizeHandler)
     }
-    this.searchFocus();
+
+    this.searchFocus()
   }
 
   public close(): void {
-    this.main.main.classList.remove(this.classes.openAbove)
-    this.main.main.classList.remove(this.classes.openBelow)
-    this.main.main.setAttribute('aria-expanded', 'false')
-    this.content.main.classList.remove(this.classes.openAbove)
-    this.content.main.classList.remove(this.classes.openBelow)
+    this.main.main.classList.remove(this.classes.openAbove, this.classes.openBelow)
+    this.content.search.input.setAttribute('aria-expanded', 'false')
+    this.content.main.classList.remove(this.classes.openAbove, this.classes.openBelow)
     this.main.arrow.path.setAttribute('d', this.classes.arrowClose)
 
     if (this.scrollHandler) {
-      window.removeEventListener('scroll', this.scrollHandler, true);
-      this.scrollHandler = undefined;
+      window.removeEventListener('scroll', this.scrollHandler, true)
+      this.scrollHandler = undefined
     }
 
     if (this.resizeHandler) {
-      window.removeEventListener('resize', this.resizeHandler);
-      this.resizeHandler = undefined;
+      window.removeEventListener('resize', this.resizeHandler)
+      this.resizeHandler = undefined
     }
-    this.main.main.focus({ preventScroll: true });
-    this.main.main.removeAttribute('aria-activedescendant');
+
+    this.clearHighlights()
+    this.main.main.focus({ preventScroll: true })
   }
 
   public updateClassStyles(): void {
@@ -246,13 +233,16 @@ export default class Render {
       this.content.list.setAttribute('aria-multiselectable', 'true');
     }
 
-    this.main.main.setAttribute('role', 'combobox');
-    this.main.main.setAttribute('aria-haspopup', 'listbox');
-    this.main.main.setAttribute('aria-controls', this.content.list.id);
-    this.main.main.setAttribute('aria-expanded', 'false');
-    this.main.main.setAttribute('aria-autocomplete', 'list');
     this.main.main.removeAttribute('aria-labelledby');
     this.main.main.removeAttribute('aria-label');
+    
+    const input = this.content.search.input;
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-haspopup', 'listbox');
+    input.setAttribute('aria-controls', this.content.list.id);
+    input.setAttribute('aria-owns', this.content.list.id);
+    input.setAttribute('aria-expanded', 'false');
+    input.setAttribute('aria-autocomplete', 'list');
 
     let labelledById = (this.settings.ariaLabelledBy || '').trim();
     let labelEl: HTMLLabelElement | null = null;
@@ -286,8 +276,6 @@ export default class Render {
       this.main.main.setAttribute('aria-label', this.settings.ariaLabel.trim());
     }
 
-    this.main.main.setAttribute('aria-owns', this.content.list.id);
-
     this.content.search.input.setAttribute('aria-controls', this.content.list.id);
     this.content.search.input.setAttribute('aria-autocomplete', 'list');
 
@@ -315,36 +303,35 @@ export default class Render {
     // This is to allow for normal selecting
     // when you may not have a search bar
     main.onkeydown = (e: KeyboardEvent): boolean => {
-      // Convert above if else statemets to switch
+      // Only react when the shell itself has focus, not when a child (chip/delete/etc) has focus
+      if (e.target !== main) return true;
+
       switch (e.key) {
         case 'ArrowUp':
         case 'ArrowDown':
-          this.callbacks.open()
-          e.key === 'ArrowDown' ? this.highlight('down') : this.highlight('up')
-          return false
+          this.callbacks.open();
+          e.key === 'ArrowDown' ? this.highlight('down') : this.highlight('up');
+          return false;
         case 'Tab':
-          this.callbacks.close()
-          return true // Continue doing normal tabbing
+          this.callbacks.close();
+          return true;
         case 'Enter':
         case ' ':
-          this.callbacks.open()
-          const highlighted = this.content.list.querySelector('.' + this.classes.highlighted) as HTMLDivElement
-          if (highlighted) {
-            highlighted.click()
-          }
-          return false
+          this.callbacks.open();
+          const highlighted = this.content.list.querySelector('.' + this.classes.highlighted) as HTMLDivElement;
+          if (highlighted) highlighted.click();
+          return false;
         case 'Escape':
-          this.callbacks.close()
-          return false
+          this.callbacks.close();
+          return false;
       }
 
-      // Check if they type a-z, A-Z and 0-9
       if (e.key.length === 1) {
-        this.callbacks.open()
+        this.callbacks.open();
       }
 
-      return true
-    }
+      return true;
+    };
 
     // Add onclick for main div
     main.onclick = (e: Event): void => {
@@ -371,6 +358,7 @@ export default class Render {
     deselect.addEventListener('keydown', (e: KeyboardEvent) => { // ADD
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
+        e.stopPropagation();
         deselect.click();
       }
     });
@@ -646,106 +634,139 @@ export default class Render {
   }
 
   public multipleValue(option: Option): HTMLDivElement {
-    const value = document.createElement('div')
-    value.classList.add(this.classes.value)
-    value.dataset.id = option.id
+    const value = document.createElement('div');
+    value.classList.add(this.classes.value);
+    value.dataset.id = option.id;
 
-    const text = document.createElement('div')
-    text.classList.add(this.classes.valueText)
-    text.textContent = option.text // For multiple values always use text
-    value.appendChild(text)
+    // Make each chip a focusable list item; keep its spoken name clean (no "remove" text here)
+    value.setAttribute('role', 'listitem');
+    value.tabIndex = 0;
+    value.setAttribute('aria-label', option.text);
 
-    // Only add deletion if the option is not mandatory
+    // Chip visible text
+    const text = document.createElement('div');
+    text.classList.add(this.classes.valueText);
+    text.textContent = option.text; // For multiple values always use text
+    value.appendChild(text);
+
+    let deleteDiv: HTMLDivElement | null = null;
+
     if (!option.mandatory) {
-      // Create delete div element
-      const deleteDiv = document.createElement('div')
-      deleteDiv.classList.add(this.classes.valueDelete)
+      // SR-only hint announced when the chip gets focus (tells users how to remove)
+      const hintId = `${this.settings.id}__chip__${option.id}__hint`;
+      const hint = document.createElement('span');
+      hint.id = hintId;
+      hint.className = 'ss-sr-only'; // ensure this class is NOT display:none
+      hint.textContent = 'Press Delete or Backspace to remove.';
+      value.appendChild(hint);
+
+      // Create delete control (hidden from a11y until chip focus)
+      deleteDiv = document.createElement('div');
+      deleteDiv.classList.add(this.classes.valueDelete);
       deleteDiv.setAttribute('role', 'button');
-      deleteDiv.setAttribute('aria-label', 'Remove selection');
-      deleteDiv.setAttribute('title', 'Remove selection');
-      deleteDiv.setAttribute('tabindex', '0');
+      deleteDiv.setAttribute('aria-label', `Remove ${option.text}`);
+      deleteDiv.setAttribute('aria-hidden', 'true'); // hidden from SR until chip is focused
+      deleteDiv.tabIndex = -1; // not tabbable until chip focus
 
-      // Add delete onclick event
       deleteDiv.onclick = (e: Event) => {
-        e.preventDefault()
-        e.stopPropagation()
+        e.preventDefault();
+        e.stopPropagation();
 
-        // Dont do anything if disabled
-        if (this.settings.disabled) {
-          return
-        }
+        if (this.settings.disabled) return;
 
-        // By Default we will delete
-        let shouldDelete = true
-        const before = this.store.getSelectedOptions()
-        const after = before.filter((o) => {
-          return o.selected && o.id !== option.id
-        }, true)
+        let shouldDelete = true;
+        const before = this.store.getSelectedOptions();
+        const after = before.filter((o) => o.selected && o.id !== option.id, true);
 
-        // Check if minSelected is set and if after length so, return
         if (this.settings.minSelected && after.length < this.settings.minSelected) {
-          return
+          return;
         }
 
-        // If there is a beforeDeselect function run it
         if (this.callbacks.beforeChange) {
-          shouldDelete = this.callbacks.beforeChange(after, before) === true
+          shouldDelete = this.callbacks.beforeChange(after as Option[], before as Option[]) === true;
         }
 
         if (shouldDelete) {
-          // Loop through after and append ids to a variable called selected
-          let selectedIds: string[] = []
+          const selectedIds: string[] = [];
           for (const o of after) {
             if (o instanceof Optgroup) {
-              for (const c of o.options) {
-                selectedIds.push(c.id)
-              }
+              for (const c of o.options) selectedIds.push(c.id);
             }
-
             if (o instanceof Option) {
-              selectedIds.push(o.id)
+              selectedIds.push(o.id);
             }
           }
-          this.callbacks.setSelected(selectedIds, false)
 
-          // Check if we need to close the dropdown
+          this.callbacks.setSelected(selectedIds, false);
+
           if (this.settings.closeOnSelect) {
-            this.callbacks.close()
+            this.callbacks.close();
           }
 
-          // Run afterChange callback
           if (this.callbacks.afterChange) {
-            this.callbacks.afterChange(after)
+            this.callbacks.afterChange(after as Option[]);
           }
 
-          this.updateDeselectAll()
+          this.updateDeselectAll();
+
+          // ⬇️ move focus back to the main container after delete
+          requestAnimationFrame(() => {
+            this.main.main.focus({ preventScroll: true });
+          });
         }
-      }
+      };
 
-      // Add delete svg
-      const deleteSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-      deleteSvg.setAttribute('viewBox', '0 0 100 100')
-      deleteSvg.setAttribute('aria-hidden', 'true')
-      deleteSvg.setAttribute('focusable', 'false')
-      const deletePath = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-      deletePath.setAttribute('d', this.classes.optionDelete)
-      deleteSvg.appendChild(deletePath)
-      deleteDiv.appendChild(deleteSvg)
+      // Keep icon quiet
+      const deleteSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      deleteSvg.setAttribute('viewBox', '0 0 100 100');
+      deleteSvg.setAttribute('aria-hidden', 'true');
+      deleteSvg.setAttribute('focusable', 'false');
+      const deletePath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      deletePath.setAttribute('d', this.classes.optionDelete);
+      deleteSvg.appendChild(deletePath);
+      deleteDiv.appendChild(deleteSvg);
+      value.appendChild(deleteDiv);
 
-      // Add the deleteDiv to the value container
-      value.appendChild(deleteDiv)
-
-      // Add keydown event listener for keyboard navigation (Enter key)
+      // Keyboard on delete button
       deleteDiv.onkeydown = (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          deleteDiv.click()  // Trigger the click event when Enter is pressed
+          e.stopPropagation();
+          deleteDiv!.click();
         }
-      }
+      };
+
+      // Chip-level keyboard remove (Delete/Backspace)
+      value.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          // Pressing Enter/Space on the chip should NOT open the listbox
+          e.preventDefault();
+          e.stopPropagation();
+        } else if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault();
+          e.stopPropagation();
+          deleteDiv?.click();
+        }
+      });
+
+      // When chip receives focus, announce hint and expose delete button to SR/tab order
+      value.addEventListener('focusin', () => {
+        value.setAttribute('aria-describedby', hintId);
+        deleteDiv!.removeAttribute('aria-hidden');
+        deleteDiv!.tabIndex = 0;
+      });
+
+      // When chip loses focus, hide hint and remove delete from SR/tab order
+      value.addEventListener('focusout', () => {
+        value.removeAttribute('aria-describedby');
+        deleteDiv!.setAttribute('aria-hidden', 'true');
+        deleteDiv!.tabIndex = -1;
+      });
     }
 
-    return value
+    return value;
   }
+
 
   public contentDiv(): Content {
     const main = document.createElement('div')
@@ -809,7 +830,7 @@ export default class Render {
       input.readOnly = true
     }
 
-    input.type = 'search'
+    input.type = 'text'
     input.placeholder = this.settings.searchPlaceholder
     input.tabIndex = -1
     if (this.settings.searchLabelledBy && this.settings.searchLabelledBy.trim()) {
@@ -1057,9 +1078,9 @@ export default class Render {
         // Highlight the next one
         let selectOption =
           options[dir === 'down' ? (i + 1 < options.length ? i + 1 : 0) : i - 1 >= 0 ? i - 1 : options.length - 1]
-        selectOption.classList.add(this.classes.highlighted)
-        this.main.main.setAttribute('aria-activedescendant', selectOption.id);
-        this.ensureElementInView(this.content.list, selectOption)
+        selectOption.classList.add(this.classes.highlighted);
+        this.content.search.input.setAttribute('aria-activedescendant', selectOption.id);
+        this.ensureElementInView(this.content.list, selectOption);
 
         // If selected option has parent classes ss-optgroup with ss-close then click it
         const selectParent = selectOption.parentElement
@@ -1079,7 +1100,7 @@ export default class Render {
     const newly = options[dir === 'down' ? 0 : options.length - 1];
     newly.classList.add(this.classes.highlighted);
 
-    this.main.main.setAttribute('aria-activedescendant', newly.id);
+    this.content.search.input.setAttribute('aria-activedescendant', newly.id);
 
     // Scroll to highlighted one
     this.ensureElementInView(this.content.list, newly);
@@ -1436,7 +1457,7 @@ export default class Render {
     if (option.selected) {
       optionEl.classList.add(this.classes.selected)
       optionEl.setAttribute('aria-selected', 'true')
-      this.main.main.setAttribute('aria-activedescendant', optionEl.id)
+      this.content.search.input.setAttribute('aria-activedescendant', optionEl.id)
     } else {
       optionEl.classList.remove(this.classes.selected)
       optionEl.setAttribute('aria-selected', 'false')

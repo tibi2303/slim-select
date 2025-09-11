@@ -47,6 +47,7 @@ export default class Render {
     private static _liveAssertive;
     private static getLiveAssertive;
     private _announceAssertive;
+    private clearHighlights;
     main: Main;
     content: Content;
     private scrollHandler;

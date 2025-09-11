@@ -384,6 +384,11 @@ var SlimSelect = (function () {
             el.textContent = '';
             requestAnimationFrame(() => { el.textContent = msg; });
         }
+        clearHighlights() {
+            const highlighted = this.content.list.querySelectorAll('.' + this.classes.highlighted);
+            highlighted.forEach(el => el.classList.remove(this.classes.highlighted));
+            this.content.search.input.removeAttribute('aria-activedescendant');
+        }
         constructor(settings, classes, store, callbacks) {
             var _a;
             this.store = store;
@@ -394,6 +399,7 @@ var SlimSelect = (function () {
             this.main = this.mainDiv();
             this.content = this.contentDiv();
             this.updateClassStyles();
+            this.main.values.setAttribute('role', 'list');
             this.updateAriaAttributes();
             const contentContainer = (_a = document
                 .querySelector(`[data-id="${this.settings.id}"]`)) === null || _a === void 0 ? void 0 : _a.closest('.offcanvas-body');
@@ -433,7 +439,7 @@ var SlimSelect = (function () {
         open() {
             this.main.arrow.path.setAttribute('d', this.classes.arrowOpen);
             this.main.main.classList.add(this.settings.openPosition === 'up' ? this.classes.openAbove : this.classes.openBelow);
-            this.main.main.setAttribute('aria-expanded', 'true');
+            this.content.search.input.setAttribute('aria-expanded', 'true');
             this.moveContent();
             const selectedOptions = this.store.getSelectedOptions();
             if (selectedOptions.length) {
@@ -453,11 +459,9 @@ var SlimSelect = (function () {
             this.searchFocus();
         }
         close() {
-            this.main.main.classList.remove(this.classes.openAbove);
-            this.main.main.classList.remove(this.classes.openBelow);
-            this.main.main.setAttribute('aria-expanded', 'false');
-            this.content.main.classList.remove(this.classes.openAbove);
-            this.content.main.classList.remove(this.classes.openBelow);
+            this.main.main.classList.remove(this.classes.openAbove, this.classes.openBelow);
+            this.content.search.input.setAttribute('aria-expanded', 'false');
+            this.content.main.classList.remove(this.classes.openAbove, this.classes.openBelow);
             this.main.arrow.path.setAttribute('d', this.classes.arrowClose);
             if (this.scrollHandler) {
                 window.removeEventListener('scroll', this.scrollHandler, true);
@@ -467,8 +471,8 @@ var SlimSelect = (function () {
                 window.removeEventListener('resize', this.resizeHandler);
                 this.resizeHandler = undefined;
             }
+            this.clearHighlights();
             this.main.main.focus({ preventScroll: true });
-            this.main.main.removeAttribute('aria-activedescendant');
         }
         updateClassStyles() {
             this.main.main.className = '';
@@ -503,13 +507,15 @@ var SlimSelect = (function () {
             if (this.settings.isMultiple) {
                 this.content.list.setAttribute('aria-multiselectable', 'true');
             }
-            this.main.main.setAttribute('role', 'combobox');
-            this.main.main.setAttribute('aria-haspopup', 'listbox');
-            this.main.main.setAttribute('aria-controls', this.content.list.id);
-            this.main.main.setAttribute('aria-expanded', 'false');
-            this.main.main.setAttribute('aria-autocomplete', 'list');
             this.main.main.removeAttribute('aria-labelledby');
             this.main.main.removeAttribute('aria-label');
+            const input = this.content.search.input;
+            input.setAttribute('role', 'combobox');
+            input.setAttribute('aria-haspopup', 'listbox');
+            input.setAttribute('aria-controls', this.content.list.id);
+            input.setAttribute('aria-owns', this.content.list.id);
+            input.setAttribute('aria-expanded', 'false');
+            input.setAttribute('aria-autocomplete', 'list');
             let labelledById = (this.settings.ariaLabelledBy || '').trim();
             let labelEl = null;
             if (!labelledById) {
@@ -538,7 +544,6 @@ var SlimSelect = (function () {
             else if (this.settings.ariaLabel && this.settings.ariaLabel.trim()) {
                 this.main.main.setAttribute('aria-label', this.settings.ariaLabel.trim());
             }
-            this.main.main.setAttribute('aria-owns', this.content.list.id);
             this.content.search.input.setAttribute('aria-controls', this.content.list.id);
             this.content.search.input.setAttribute('aria-autocomplete', 'list');
             if (labelledById && document.getElementById(labelledById)) {
@@ -560,6 +565,8 @@ var SlimSelect = (function () {
             main.id = this.settings.id + '-main';
             main.tabIndex = 0;
             main.onkeydown = (e) => {
+                if (e.target !== main)
+                    return true;
                 switch (e.key) {
                     case 'ArrowUp':
                     case 'ArrowDown':
@@ -573,9 +580,8 @@ var SlimSelect = (function () {
                     case ' ':
                         this.callbacks.open();
                         const highlighted = this.content.list.querySelector('.' + this.classes.highlighted);
-                        if (highlighted) {
+                        if (highlighted)
                             highlighted.click();
-                        }
                         return false;
                     case 'Escape':
                         this.callbacks.close();
@@ -603,6 +609,7 @@ var SlimSelect = (function () {
             deselect.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
+                    e.stopPropagation();
                     deselect.click();
                 }
             });
@@ -814,28 +821,35 @@ var SlimSelect = (function () {
             const value = document.createElement('div');
             value.classList.add(this.classes.value);
             value.dataset.id = option.id;
+            value.setAttribute('role', 'listitem');
+            value.tabIndex = 0;
+            value.setAttribute('aria-label', option.text);
             const text = document.createElement('div');
             text.classList.add(this.classes.valueText);
             text.textContent = option.text;
             value.appendChild(text);
+            let deleteDiv = null;
             if (!option.mandatory) {
-                const deleteDiv = document.createElement('div');
+                const hintId = `${this.settings.id}__chip__${option.id}__hint`;
+                const hint = document.createElement('span');
+                hint.id = hintId;
+                hint.className = 'ss-sr-only';
+                hint.textContent = 'Press Delete or Backspace to remove.';
+                value.appendChild(hint);
+                deleteDiv = document.createElement('div');
                 deleteDiv.classList.add(this.classes.valueDelete);
                 deleteDiv.setAttribute('role', 'button');
-                deleteDiv.setAttribute('aria-label', 'Remove selection');
-                deleteDiv.setAttribute('title', 'Remove selection');
-                deleteDiv.setAttribute('tabindex', '0');
+                deleteDiv.setAttribute('aria-label', `Remove ${option.text}`);
+                deleteDiv.setAttribute('aria-hidden', 'true');
+                deleteDiv.tabIndex = -1;
                 deleteDiv.onclick = (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    if (this.settings.disabled) {
+                    if (this.settings.disabled)
                         return;
-                    }
                     let shouldDelete = true;
                     const before = this.store.getSelectedOptions();
-                    const after = before.filter((o) => {
-                        return o.selected && o.id !== option.id;
-                    }, true);
+                    const after = before.filter((o) => o.selected && o.id !== option.id, true);
                     if (this.settings.minSelected && after.length < this.settings.minSelected) {
                         return;
                     }
@@ -843,12 +857,11 @@ var SlimSelect = (function () {
                         shouldDelete = this.callbacks.beforeChange(after, before) === true;
                     }
                     if (shouldDelete) {
-                        let selectedIds = [];
+                        const selectedIds = [];
                         for (const o of after) {
                             if (o instanceof Optgroup) {
-                                for (const c of o.options) {
+                                for (const c of o.options)
                                     selectedIds.push(c.id);
-                                }
                             }
                             if (o instanceof Option) {
                                 selectedIds.push(o.id);
@@ -862,6 +875,9 @@ var SlimSelect = (function () {
                             this.callbacks.afterChange(after);
                         }
                         this.updateDeselectAll();
+                        requestAnimationFrame(() => {
+                            this.main.main.focus({ preventScroll: true });
+                        });
                     }
                 };
                 const deleteSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -876,9 +892,31 @@ var SlimSelect = (function () {
                 deleteDiv.onkeydown = (e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
+                        e.stopPropagation();
                         deleteDiv.click();
                     }
                 };
+                value.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                    else if (e.key === 'Delete' || e.key === 'Backspace') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        deleteDiv === null || deleteDiv === void 0 ? void 0 : deleteDiv.click();
+                    }
+                });
+                value.addEventListener('focusin', () => {
+                    value.setAttribute('aria-describedby', hintId);
+                    deleteDiv.removeAttribute('aria-hidden');
+                    deleteDiv.tabIndex = 0;
+                });
+                value.addEventListener('focusout', () => {
+                    value.removeAttribute('aria-describedby');
+                    deleteDiv.setAttribute('aria-hidden', 'true');
+                    deleteDiv.tabIndex = -1;
+                });
             }
             return value;
         }
@@ -928,7 +966,7 @@ var SlimSelect = (function () {
                 main.classList.add(this.classes.hide);
                 input.readOnly = true;
             }
-            input.type = 'search';
+            input.type = 'text';
             input.placeholder = this.settings.searchPlaceholder;
             input.tabIndex = -1;
             if (this.settings.searchLabelledBy && this.settings.searchLabelledBy.trim()) {
@@ -1118,7 +1156,7 @@ var SlimSelect = (function () {
                     }
                     let selectOption = options[dir === 'down' ? (i + 1 < options.length ? i + 1 : 0) : i - 1 >= 0 ? i - 1 : options.length - 1];
                     selectOption.classList.add(this.classes.highlighted);
-                    this.main.main.setAttribute('aria-activedescendant', selectOption.id);
+                    this.content.search.input.setAttribute('aria-activedescendant', selectOption.id);
                     this.ensureElementInView(this.content.list, selectOption);
                     const selectParent = selectOption.parentElement;
                     if (selectParent && selectParent.classList.contains(this.classes.close)) {
@@ -1132,7 +1170,7 @@ var SlimSelect = (function () {
             }
             const newly = options[dir === 'down' ? 0 : options.length - 1];
             newly.classList.add(this.classes.highlighted);
-            this.main.main.setAttribute('aria-activedescendant', newly.id);
+            this.content.search.input.setAttribute('aria-activedescendant', newly.id);
             this.ensureElementInView(this.content.list, newly);
         }
         listDiv() {
@@ -1373,7 +1411,7 @@ var SlimSelect = (function () {
             if (option.selected) {
                 optionEl.classList.add(this.classes.selected);
                 optionEl.setAttribute('aria-selected', 'true');
-                this.main.main.setAttribute('aria-activedescendant', optionEl.id);
+                this.content.search.input.setAttribute('aria-activedescendant', optionEl.id);
             }
             else {
                 optionEl.classList.remove(this.classes.selected);
