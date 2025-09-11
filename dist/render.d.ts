@@ -87,4 +87,5 @@ export default class Render {
     ensureElementInView(container: HTMLElement, element: HTMLElement): void;
     putContent(): 'up' | 'down';
     updateDeselectAll(): void;
+    private setActiveDescendant;
 }

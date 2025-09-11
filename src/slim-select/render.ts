@@ -78,6 +78,7 @@ export default class Render {
     const highlighted = this.content.list.querySelectorAll('.' + this.classes.highlighted)
     highlighted.forEach(el => el.classList.remove(this.classes.highlighted))
     this.content.search.input.removeAttribute('aria-activedescendant')
+    this.main.main.removeAttribute('aria-activedescendant')
   }
 
   public main: Main
@@ -146,7 +147,8 @@ export default class Render {
   public open(): void {
     this.main.arrow.path.setAttribute('d', this.classes.arrowOpen)
     this.main.main.classList.add(this.settings.openPosition === 'up' ? this.classes.openAbove : this.classes.openBelow)
-    this.content.search.input.setAttribute('aria-expanded', 'true')
+    this.main.main.setAttribute('aria-expanded', 'true')
+    // expanded belongs on the combobox (main), not the input
     this.moveContent()
 
     const selectedOptions = this.store.getSelectedOptions()
@@ -171,7 +173,9 @@ export default class Render {
 
   public close(): void {
     this.main.main.classList.remove(this.classes.openAbove, this.classes.openBelow)
-    this.content.search.input.setAttribute('aria-expanded', 'false')
+    // expanded belongs on the combobox (main), not the input
+    this.content.search.input.removeAttribute('aria-expanded')
+    this.main.main.setAttribute('aria-expanded', 'false')
     this.content.main.classList.remove(this.classes.openAbove, this.classes.openBelow)
     this.main.arrow.path.setAttribute('d', this.classes.arrowClose)
 
@@ -229,20 +233,24 @@ export default class Render {
     this.content.list.setAttribute('role', 'listbox');
     this.content.list.setAttribute('id', this.content.main.id + '-list');
     this.content.list.setAttribute('aria-label', this.settings.contentAriaLabel);
+    this.main.main.setAttribute('role', 'combobox');
+    this.main.main.setAttribute('aria-controls', this.content.list.id);
+    this.main.main.setAttribute('aria-haspopup', 'listbox');
+    this.main.main.setAttribute('aria-expanded', 'false');
     if (this.settings.isMultiple) {
       this.content.list.setAttribute('aria-multiselectable', 'true');
     }
 
     this.main.main.removeAttribute('aria-labelledby');
     this.main.main.removeAttribute('aria-label');
-    
+
     const input = this.content.search.input;
-    input.setAttribute('role', 'combobox');
-    input.setAttribute('aria-haspopup', 'listbox');
+    // Input is just the text entry, not a combobox
+    input.setAttribute('role', 'searchbox');
     input.setAttribute('aria-controls', this.content.list.id);
     input.setAttribute('aria-owns', this.content.list.id);
-    input.setAttribute('aria-expanded', 'false');
     input.setAttribute('aria-autocomplete', 'list');
+    input.removeAttribute('aria-expanded');
 
     let labelledById = (this.settings.ariaLabelledBy || '').trim();
     let labelEl: HTMLLabelElement | null = null;
@@ -306,28 +314,51 @@ export default class Render {
       // Only react when the shell itself has focus, not when a child (chip/delete/etc) has focus
       if (e.target !== main) return true;
 
-      switch (e.key) {
-        case 'ArrowUp':
-        case 'ArrowDown':
-          this.callbacks.open();
-          e.key === 'ArrowDown' ? this.highlight('down') : this.highlight('up');
-          return false;
-        case 'Tab':
-          this.callbacks.close();
-          return true;
-        case 'Enter':
-        case ' ':
-          this.callbacks.open();
-          const highlighted = this.content.list.querySelector('.' + this.classes.highlighted) as HTMLDivElement;
-          if (highlighted) highlighted.click();
-          return false;
-        case 'Escape':
-          this.callbacks.close();
-          return false;
+      const focusAndThen = (fn: () => void) => {
+        this.callbacks.open()
+        // shift focus first so SR/VoiceOver announces the option on first key press
+        requestAnimationFrame(() => {
+          this.searchFocus()
+          fn()
+        })
       }
 
-      if (e.key.length === 1) {
-        this.callbacks.open();
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault()
+          focusAndThen(() => this.highlight('down'))
+          return false
+        case 'ArrowUp':
+          e.preventDefault()
+          focusAndThen(() => this.highlight('up'))
+          return false
+        case 'Tab':
+          this.callbacks.close()
+          return true
+        case 'Enter':
+        case ' ':
+          e.preventDefault()
+          focusAndThen(() => {
+            const highlighted = this.content.list.querySelector('.' + this.classes.highlighted) as HTMLDivElement
+            if (highlighted) highlighted.click()
+          })
+          return false
+      }
+
+      // Forward printable characters into the search input
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault()
+        this.callbacks.open()
+        requestAnimationFrame(() => {
+          this.searchFocus()
+          const inp = this.content.search.input
+          const selStart = inp.selectionStart ?? inp.value.length
+          const selEnd = inp.selectionEnd ?? inp.value.length
+          inp.value = inp.value.slice(0, selStart) + e.key + inp.value.slice(selEnd)
+          inp.setSelectionRange(selStart + 1, selStart + 1)
+          this.callbacks.search(inp.value)
+        })
+        return false
       }
 
       return true;
@@ -485,6 +516,7 @@ export default class Render {
     const placeholder = document.createElement('div')
     placeholder.classList.add(this.classes.placeholder)
     placeholder.innerHTML = placeholderText
+    placeholder.setAttribute('aria-hidden', 'true');
     return placeholder
   }
 
@@ -507,6 +539,7 @@ export default class Render {
       return o.selected && !o.placeholder
     }, false) as Option[]
     const selectedSingle = selected.length > 0 ? selected[0] : null
+    this.main.values.removeAttribute('role');
 
     // If nothing is seleected use settings placeholder text
     if (!selectedSingle) {
@@ -543,9 +576,11 @@ export default class Render {
 
     // If selectedOptions is empty set placeholder
     if (selectedOptions.length === 0) {
+      this.main.values.removeAttribute('role'); 
       this.main.values.innerHTML = this.placeholder().outerHTML
       return
     } else {
+      this.main.values.setAttribute('role', 'list');
       // If there is a placeholder, remove it
       const placeholder = this.main.values.querySelector('.' + this.classes.placeholder)
       if (placeholder) {
@@ -1036,6 +1071,8 @@ export default class Render {
       // Check if option doesnt already have highlighted class
       if (!options[0].classList.contains(this.classes.highlighted)) {
         options[0].classList.add(this.classes.highlighted)
+        const id = options[0].id
+        this.setActiveDescendant(id)
         return
       }
     }
@@ -1053,6 +1090,7 @@ export default class Render {
       for (const o of options) {
         if (o.classList.contains(this.classes.selected)) {
           o.classList.add(this.classes.highlighted)
+          this.setActiveDescendant(o.id)
           break
         }
       }
@@ -1065,24 +1103,15 @@ export default class Render {
         const prevOption = options[i]
         // Remove highlighted class from current one
         prevOption.classList.remove(this.classes.highlighted)
-
-        // If previous option has parent classes ss-optgroup with ss-open then click it
-        const prevParent = prevOption.parentElement
-        if (prevParent && prevParent.classList.contains(this.classes.open)) {
-          const optgroupLabel = prevParent.querySelector('.' + this.classes.optgroupLabel) as HTMLDivElement
-          if (optgroupLabel) {
-            optgroupLabel.click()
-          }
-        }
-
         // Highlight the next one
-        let selectOption =
+        const selectOption =
           options[dir === 'down' ? (i + 1 < options.length ? i + 1 : 0) : i - 1 >= 0 ? i - 1 : options.length - 1]
-        selectOption.classList.add(this.classes.highlighted);
-        this.content.search.input.setAttribute('aria-activedescendant', selectOption.id);
-        this.ensureElementInView(this.content.list, selectOption);
 
-        // If selected option has parent classes ss-optgroup with ss-close then click it
+        selectOption.classList.add(this.classes.highlighted)
+        this.setActiveDescendant(selectOption.id)
+        this.ensureElementInView(this.content.list, selectOption)
+
+        // If selected option has parent classes ss-optgroup with ss-close then open it
         const selectParent = selectOption.parentElement
         if (selectParent && selectParent.classList.contains(this.classes.close)) {
           const optgroupLabel = selectParent.querySelector('.' + this.classes.optgroupLabel) as HTMLDivElement
@@ -1097,13 +1126,10 @@ export default class Render {
 
     // If we get here, there is no highlighted option
     // So we will highlight the first or last based upon direction
-    const newly = options[dir === 'down' ? 0 : options.length - 1];
-    newly.classList.add(this.classes.highlighted);
-
-    this.content.search.input.setAttribute('aria-activedescendant', newly.id);
-
-    // Scroll to highlighted one
-    this.ensureElementInView(this.content.list, newly);
+    const newly = options[dir === 'down' ? 0 : options.length - 1]
+    newly.classList.add(this.classes.highlighted)
+    this.setActiveDescendant(newly.id)
+    this.ensureElementInView(this.content.list, newly)
   }
 
   // Create main container that options will reside
@@ -1457,7 +1483,7 @@ export default class Render {
     if (option.selected) {
       optionEl.classList.add(this.classes.selected)
       optionEl.setAttribute('aria-selected', 'true')
-      this.content.search.input.setAttribute('aria-activedescendant', optionEl.id)
+      this.setActiveDescendant(optionEl.id)
     } else {
       optionEl.classList.remove(this.classes.selected)
       optionEl.setAttribute('aria-selected', 'false')
@@ -1503,10 +1529,10 @@ export default class Render {
 
           // Handles range selection
           if (!this.settings.closeOnSelect) {
-            if (e.shiftKey && this.lastSelectedOption) {
+            if ((e as MouseEvent).shiftKey && this.lastSelectedOption) {
               const options = this.store.getDataOptions()
-              let lastClickedOptionIndex = options.findIndex((o: Option) => o.id === this.lastSelectedOption!.id)
-              let currentOptionIndex = options.findIndex((o: Option) => o.id === option.id)
+              const lastClickedOptionIndex = options.findIndex((o: Option) => o.id === this.lastSelectedOption!.id)
+              const currentOptionIndex = options.findIndex((o: Option) => o.id === option.id)
               if (lastClickedOptionIndex >= 0 && currentOptionIndex >= 0) {
                 // Select the range from the last clicked option to the current one, or vice versa.
                 const startIndex = Math.min(lastClickedOptionIndex, currentOptionIndex)
@@ -1707,5 +1733,17 @@ export default class Render {
     } else {
       deselectButton.classList.add(hideClass)
     }
+  }
+
+  // Keep the active descendant on the *combobox* so screen readers announce the option on first key press.
+  private setActiveDescendant(id: string) {
+    if (!id) {
+      this.main.main.removeAttribute('aria-activedescendant')
+      this.content.search.input.removeAttribute('aria-activedescendant')
+      return
+    }
+    this.main.main.setAttribute('aria-activedescendant', id)
+    // also mirror onto the input for broader AT compatibility
+    this.content.search.input.setAttribute('aria-activedescendant', id)
   }
 }

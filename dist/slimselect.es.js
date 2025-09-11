@@ -385,6 +385,7 @@ class Render {
         const highlighted = this.content.list.querySelectorAll('.' + this.classes.highlighted);
         highlighted.forEach(el => el.classList.remove(this.classes.highlighted));
         this.content.search.input.removeAttribute('aria-activedescendant');
+        this.main.main.removeAttribute('aria-activedescendant');
     }
     constructor(settings, classes, store, callbacks) {
         var _a;
@@ -436,7 +437,7 @@ class Render {
     open() {
         this.main.arrow.path.setAttribute('d', this.classes.arrowOpen);
         this.main.main.classList.add(this.settings.openPosition === 'up' ? this.classes.openAbove : this.classes.openBelow);
-        this.content.search.input.setAttribute('aria-expanded', 'true');
+        this.main.main.setAttribute('aria-expanded', 'true');
         this.moveContent();
         const selectedOptions = this.store.getSelectedOptions();
         if (selectedOptions.length) {
@@ -457,7 +458,8 @@ class Render {
     }
     close() {
         this.main.main.classList.remove(this.classes.openAbove, this.classes.openBelow);
-        this.content.search.input.setAttribute('aria-expanded', 'false');
+        this.content.search.input.removeAttribute('aria-expanded');
+        this.main.main.setAttribute('aria-expanded', 'false');
         this.content.main.classList.remove(this.classes.openAbove, this.classes.openBelow);
         this.main.arrow.path.setAttribute('d', this.classes.arrowClose);
         if (this.scrollHandler) {
@@ -501,18 +503,21 @@ class Render {
         this.content.list.setAttribute('role', 'listbox');
         this.content.list.setAttribute('id', this.content.main.id + '-list');
         this.content.list.setAttribute('aria-label', this.settings.contentAriaLabel);
+        this.main.main.setAttribute('role', 'combobox');
+        this.main.main.setAttribute('aria-controls', this.content.list.id);
+        this.main.main.setAttribute('aria-haspopup', 'listbox');
+        this.main.main.setAttribute('aria-expanded', 'false');
         if (this.settings.isMultiple) {
             this.content.list.setAttribute('aria-multiselectable', 'true');
         }
         this.main.main.removeAttribute('aria-labelledby');
         this.main.main.removeAttribute('aria-label');
         const input = this.content.search.input;
-        input.setAttribute('role', 'combobox');
-        input.setAttribute('aria-haspopup', 'listbox');
+        input.setAttribute('role', 'searchbox');
         input.setAttribute('aria-controls', this.content.list.id);
         input.setAttribute('aria-owns', this.content.list.id);
-        input.setAttribute('aria-expanded', 'false');
         input.setAttribute('aria-autocomplete', 'list');
+        input.removeAttribute('aria-expanded');
         let labelledById = (this.settings.ariaLabelledBy || '').trim();
         let labelEl = null;
         if (!labelledById) {
@@ -564,28 +569,49 @@ class Render {
         main.onkeydown = (e) => {
             if (e.target !== main)
                 return true;
+            const focusAndThen = (fn) => {
+                this.callbacks.open();
+                requestAnimationFrame(() => {
+                    this.searchFocus();
+                    fn();
+                });
+            };
             switch (e.key) {
-                case 'ArrowUp':
                 case 'ArrowDown':
-                    this.callbacks.open();
-                    e.key === 'ArrowDown' ? this.highlight('down') : this.highlight('up');
+                    e.preventDefault();
+                    focusAndThen(() => this.highlight('down'));
+                    return false;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    focusAndThen(() => this.highlight('up'));
                     return false;
                 case 'Tab':
                     this.callbacks.close();
                     return true;
                 case 'Enter':
                 case ' ':
-                    this.callbacks.open();
-                    const highlighted = this.content.list.querySelector('.' + this.classes.highlighted);
-                    if (highlighted)
-                        highlighted.click();
-                    return false;
-                case 'Escape':
-                    this.callbacks.close();
+                    e.preventDefault();
+                    focusAndThen(() => {
+                        const highlighted = this.content.list.querySelector('.' + this.classes.highlighted);
+                        if (highlighted)
+                            highlighted.click();
+                    });
                     return false;
             }
-            if (e.key.length === 1) {
+            if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                e.preventDefault();
                 this.callbacks.open();
+                requestAnimationFrame(() => {
+                    var _a, _b;
+                    this.searchFocus();
+                    const inp = this.content.search.input;
+                    const selStart = (_a = inp.selectionStart) !== null && _a !== void 0 ? _a : inp.value.length;
+                    const selEnd = (_b = inp.selectionEnd) !== null && _b !== void 0 ? _b : inp.value.length;
+                    inp.value = inp.value.slice(0, selStart) + e.key + inp.value.slice(selEnd);
+                    inp.setSelectionRange(selStart + 1, selStart + 1);
+                    this.callbacks.search(inp.value);
+                });
+                return false;
             }
             return true;
         };
@@ -700,6 +726,7 @@ class Render {
         const placeholder = document.createElement('div');
         placeholder.classList.add(this.classes.placeholder);
         placeholder.innerHTML = placeholderText;
+        placeholder.setAttribute('aria-hidden', 'true');
         return placeholder;
     }
     renderValues() {
@@ -715,6 +742,7 @@ class Render {
             return o.selected && !o.placeholder;
         }, false);
         const selectedSingle = selected.length > 0 ? selected[0] : null;
+        this.main.values.removeAttribute('role');
         if (!selectedSingle) {
             this.main.values.innerHTML = this.placeholder().outerHTML;
         }
@@ -742,10 +770,12 @@ class Render {
             return opt.selected && opt.display;
         }, false);
         if (selectedOptions.length === 0) {
+            this.main.values.removeAttribute('role');
             this.main.values.innerHTML = this.placeholder().outerHTML;
             return;
         }
         else {
+            this.main.values.setAttribute('role', 'list');
             const placeholder = this.main.values.querySelector('.' + this.classes.placeholder);
             if (placeholder) {
                 placeholder.remove();
@@ -1123,6 +1153,8 @@ class Render {
         if (options.length === 1) {
             if (!options[0].classList.contains(this.classes.highlighted)) {
                 options[0].classList.add(this.classes.highlighted);
+                const id = options[0].id;
+                this.setActiveDescendant(id);
                 return;
             }
         }
@@ -1136,6 +1168,7 @@ class Render {
             for (const o of options) {
                 if (o.classList.contains(this.classes.selected)) {
                     o.classList.add(this.classes.highlighted);
+                    this.setActiveDescendant(o.id);
                     break;
                 }
             }
@@ -1144,16 +1177,9 @@ class Render {
             if (options[i].classList.contains(this.classes.highlighted)) {
                 const prevOption = options[i];
                 prevOption.classList.remove(this.classes.highlighted);
-                const prevParent = prevOption.parentElement;
-                if (prevParent && prevParent.classList.contains(this.classes.open)) {
-                    const optgroupLabel = prevParent.querySelector('.' + this.classes.optgroupLabel);
-                    if (optgroupLabel) {
-                        optgroupLabel.click();
-                    }
-                }
-                let selectOption = options[dir === 'down' ? (i + 1 < options.length ? i + 1 : 0) : i - 1 >= 0 ? i - 1 : options.length - 1];
+                const selectOption = options[dir === 'down' ? (i + 1 < options.length ? i + 1 : 0) : i - 1 >= 0 ? i - 1 : options.length - 1];
                 selectOption.classList.add(this.classes.highlighted);
-                this.content.search.input.setAttribute('aria-activedescendant', selectOption.id);
+                this.setActiveDescendant(selectOption.id);
                 this.ensureElementInView(this.content.list, selectOption);
                 const selectParent = selectOption.parentElement;
                 if (selectParent && selectParent.classList.contains(this.classes.close)) {
@@ -1167,7 +1193,7 @@ class Render {
         }
         const newly = options[dir === 'down' ? 0 : options.length - 1];
         newly.classList.add(this.classes.highlighted);
-        this.content.search.input.setAttribute('aria-activedescendant', newly.id);
+        this.setActiveDescendant(newly.id);
         this.ensureElementInView(this.content.list, newly);
     }
     listDiv() {
@@ -1408,7 +1434,7 @@ class Render {
         if (option.selected) {
             optionEl.classList.add(this.classes.selected);
             optionEl.setAttribute('aria-selected', 'true');
-            this.content.search.input.setAttribute('aria-activedescendant', optionEl.id);
+            this.setActiveDescendant(optionEl.id);
         }
         else {
             optionEl.classList.remove(this.classes.selected);
@@ -1439,8 +1465,8 @@ class Render {
                     if (!this.settings.closeOnSelect) {
                         if (e.shiftKey && this.lastSelectedOption) {
                             const options = this.store.getDataOptions();
-                            let lastClickedOptionIndex = options.findIndex((o) => o.id === this.lastSelectedOption.id);
-                            let currentOptionIndex = options.findIndex((o) => o.id === option.id);
+                            const lastClickedOptionIndex = options.findIndex((o) => o.id === this.lastSelectedOption.id);
+                            const currentOptionIndex = options.findIndex((o) => o.id === option.id);
                             if (lastClickedOptionIndex >= 0 && currentOptionIndex >= 0) {
                                 const startIndex = Math.min(lastClickedOptionIndex, currentOptionIndex);
                                 const endIndex = Math.max(lastClickedOptionIndex, currentOptionIndex);
@@ -1582,6 +1608,15 @@ class Render {
         else {
             deselectButton.classList.add(hideClass);
         }
+    }
+    setActiveDescendant(id) {
+        if (!id) {
+            this.main.main.removeAttribute('aria-activedescendant');
+            this.content.search.input.removeAttribute('aria-activedescendant');
+            return;
+        }
+        this.main.main.setAttribute('aria-activedescendant', id);
+        this.content.search.input.setAttribute('aria-activedescendant', id);
     }
 }
 Render._livePolite = null;

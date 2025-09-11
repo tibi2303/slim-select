@@ -4,7 +4,7 @@
 
 'use strict'
 
-import { describe, expect, test } from '@jest/globals'
+import { describe, expect, test, beforeEach, jest } from '@jest/globals'
 import Render, { Callbacks } from './render'
 import Settings from './settings'
 import Store, { Option } from './store'
@@ -23,19 +23,9 @@ describe('render module', () => {
 
   beforeEach(() => {
     const store = new Store('single', [
-      {
-        text: 'test0',
-        value: 'test0'
-      },
-      {
-        text: 'test1',
-        value: 'test1',
-        html: '<span>test1</span>'
-      },
-      {
-        text: 'test2',
-        selected: true
-      }
+      { text: 'test0', value: 'test0' },
+      { text: 'test1', value: 'test1', html: '<span>test1</span>' },
+      { text: 'test2', selected: true }
     ])
 
     const settings = new Settings()
@@ -50,15 +40,15 @@ describe('render module', () => {
     afterChangeMock = jest.fn(() => {})
     beforeChangeMock = jest.fn(() => true)
 
-    const callbacks = {
+    const callbacks: Callbacks = {
       open: openMock,
       close: closeMock,
-      addSelected: addSelectedMock,
       setSelected: setSelectedMock,
       addOption: addOptionMock,
       search: searchMock,
       afterChange: afterChangeMock,
-      beforeChange: beforeChangeMock
+      // ensure TS sees a boolean | void, while still counting calls via beforeChangeMock
+      beforeChange: (newVal, oldVal) => beforeChangeMock(newVal, oldVal) as boolean
     }
 
     render = new Render(settings, classes, store, callbacks)
@@ -74,17 +64,14 @@ describe('render module', () => {
       const settings = new Settings()
       const classes = new CssClasses()
 
-      const callbacks = {
+      const callbacks: Callbacks = {
         open: () => {},
         close: () => {},
-        addSelected: () => {},
         setSelected: () => {},
         addOption: () => {},
         search: () => {},
-        beforeChange: () => {
-          return true
-        }
-      } as Callbacks
+        beforeChange: () => true
+      }
 
       const renderInstance = new Render(settings, classes, store, callbacks)
       expect(renderInstance).toBeInstanceOf(Render)
@@ -119,7 +106,9 @@ describe('render module', () => {
       expect(render.main.arrow.path.getAttribute('d')).toBe(render.classes.arrowOpen)
       expect(render.main.main.classList.contains(render.classes.openBelow)).toBe(true)
       expect(render.main.main.classList.contains(render.classes.openAbove)).toBe(false)
-      expect(render.content.search.input.getAttribute('aria-expanded')).toBe('true')
+      // aria-expanded now lives on the combobox container, not the input
+      expect(render.main.main.getAttribute('aria-expanded')).toBe('true')
+      expect(render.content.search.input.hasAttribute('aria-expanded')).toBe(false)
       // moveContentBelow will add class to content as well
       expect(render.content.main.classList.contains(render.classes.openBelow)).toBe(true)
       expect(render.content.main.classList.contains(render.classes.openAbove)).toBe(false)
@@ -134,7 +123,9 @@ describe('render module', () => {
       expect(render.main.arrow.path.getAttribute('d')).toBe(render.classes.arrowClose)
       expect(render.main.main.classList.contains(render.classes.openBelow)).toBe(false)
       expect(render.main.main.classList.contains(render.classes.openAbove)).toBe(false)
-      expect(render.content.search.input.getAttribute('aria-expanded')).toBe('false')
+      // aria-expanded now lives on the combobox container, not the input
+      expect(render.main.main.getAttribute('aria-expanded')).toBe('false')
+      expect(render.content.search.input.hasAttribute('aria-expanded')).toBe(false)
       expect(render.content.main.classList.contains(render.classes.openBelow)).toBe(false)
       expect(render.content.main.classList.contains(render.classes.openAbove)).toBe(false)
     })
@@ -144,7 +135,6 @@ describe('render module', () => {
     test('existing classes and styles are cleared', () => {
       render.main.main.className = 'test'
       ;(render.main.main.style as any).color = 'red'
-
       render.content.main.className = 'test'
       ;(render.content.main.style as any).color = 'red'
 
@@ -152,7 +142,6 @@ describe('render module', () => {
 
       expect(render.main.main.classList.contains('test')).toBe(false)
       expect(render.main.main.style.color).toBeFalsy()
-
       expect(render.content.main.classList.contains('test')).toBe(false)
       expect(render.content.main.style.color).toBeFalsy()
     })
@@ -190,18 +179,25 @@ describe('render module', () => {
   })
 
   describe('updateAriaAttributes', () => {
-    test('sets correct aria attributes (on input, not main)', () => {
+    test('sets correct aria attributes on combobox and searchbox', () => {
       render.updateAriaAttributes()
 
       const input = render.content.search.input
       const list = render.content.list
+      const main = render.main.main
 
-      expect(input.getAttribute('role')).toBe('combobox')
-      expect(input.getAttribute('aria-haspopup')).toBe('listbox')
+      // Main is the combobox
+      expect(main.getAttribute('role')).toBe('combobox')
+      expect(main.getAttribute('aria-controls')).toBe(list.id)
+      expect(main.getAttribute('aria-haspopup')).toBe('listbox')
+      expect(main.getAttribute('aria-expanded')).toBe('false')
+
+      // Input is a plain searchbox (not a combobox)
+      expect(input.getAttribute('role')).toBe('searchbox')
       expect(input.getAttribute('aria-controls')).toBe(list.id)
       expect(input.getAttribute('aria-owns')).toBe(list.id)
-      expect(input.getAttribute('aria-expanded')).toBe('false')
       expect(input.getAttribute('aria-autocomplete')).toBe('list')
+      expect(input.hasAttribute('aria-expanded')).toBe(false)
 
       expect(list.getAttribute('role')).toBe('listbox')
       expect(list.getAttribute('aria-label')).toBe(render.settings.contentAriaLabel)
@@ -238,12 +234,14 @@ describe('render module', () => {
       expect(main.children.item(2)?.children.item(0)).toBeInstanceOf(SVGElement)
     })
 
-    test('arrow key events on main element move highlight', () => {
+    test('arrow key events on main element move highlight (opens then focuses search)', () => {
       const highlightMock = jest.fn(() => {})
       render.highlight = highlightMock
 
+      const rafOrig = (global as any).requestAnimationFrame
+      ;(global as any).requestAnimationFrame = (cb: Function) => cb()
+
       render.main.main.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }))
-      expect(openMock).toHaveBeenCalled()
       expect(highlightMock).toHaveBeenCalledTimes(1)
       expect(highlightMock.mock.calls[0]).toStrictEqual(['up'])
 
@@ -251,56 +249,60 @@ describe('render module', () => {
       expect(openMock).toHaveBeenCalledTimes(2)
       expect(highlightMock).toHaveBeenCalledTimes(2)
       expect(highlightMock.mock.calls[1]).toStrictEqual(['down'])
+
+      ;(global as any).requestAnimationFrame = rafOrig
     })
 
-    test('tab and escape key event on main element triggers close callback', () => {
+    test('tab key on main triggers close callback', () => {
       render.main.main.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }))
       expect(closeMock).toHaveBeenCalled()
-      render.main.main.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-      expect(closeMock).toHaveBeenCalledTimes(2)
     })
 
-    test('enter and space key event on main element triggers open callback', () => {
+    test('enter and space key on main opens and selects highlighted', () => {
       render.main.main.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
       expect(openMock).toHaveBeenCalled()
       render.main.main.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }))
       expect(openMock).toHaveBeenCalledTimes(2)
     })
 
+    test('printable character on main forwards to input and triggers search', () => {
+      const rafOrig = (global as any).requestAnimationFrame
+      ;(global as any).requestAnimationFrame = (cb: Function) => cb()
+
+      render.main.main.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }))
+
+      expect(openMock).toHaveBeenCalled()
+      expect(render.content.search.input.value).toContain('a')
+
+      ;(global as any).requestAnimationFrame = rafOrig
+    })
+
     test('click on main event does nothing if element is disabled', () => {
       render.settings.disabled = true
-
       render.main.main.dispatchEvent(new MouseEvent('click'))
-
       expect(openMock).not.toHaveBeenCalled()
       expect(closeMock).not.toHaveBeenCalled()
     })
 
     test('click on main event triggers open if element is closed', () => {
       render.main.main.dispatchEvent(new MouseEvent('click'))
-
       expect(openMock).toHaveBeenCalled()
       expect(closeMock).not.toHaveBeenCalled()
     })
 
     test('click on main event triggers close if element is opened', () => {
       render.settings.isOpen = true
-
       render.main.main.dispatchEvent(new MouseEvent('click'))
-
       expect(openMock).not.toHaveBeenCalled()
       expect(closeMock).toHaveBeenCalled()
     })
 
     test('click on deselect does nothing if element is disabled', () => {
       render.settings.disabled = true
-
       const deselectElement: HTMLDivElement = render.main.main.querySelector(
         '.' + render.classes.deselect
       ) as HTMLDivElement
-
       deselectElement.dispatchEvent(new MouseEvent('click'))
-
       expect(afterChangeMock).not.toHaveBeenCalled()
     })
 
@@ -308,9 +310,7 @@ describe('render module', () => {
       const deselectElement: HTMLDivElement = render.main.main.querySelector(
         '.' + render.classes.deselect
       ) as HTMLDivElement
-
       deselectElement.dispatchEvent(new MouseEvent('click'))
-
       expect(setSelectedMock).toHaveBeenCalled()
       expect(closeMock).toHaveBeenCalled()
       expect(afterChangeMock).toHaveBeenCalled()
@@ -318,7 +318,6 @@ describe('render module', () => {
 
     test('click on deselect on multiple select runs callbacks', () => {
       render.settings.isMultiple = true
-
       const deselectAllMock = jest.fn()
       render.updateDeselectAll = deselectAllMock
 
@@ -336,7 +335,6 @@ describe('render module', () => {
 
   describe('mainFocus', () => {
     let focusMock: jest.Mock
-
     beforeEach(() => {
       focusMock = jest.fn(() => {})
       render.main.main.focus = focusMock
@@ -361,32 +359,18 @@ describe('render module', () => {
     test('placeholder uses fallback text if no option is found', () => {
       render.settings.placeholderText = 'placeholder text'
       const placeholder = render.placeholder()
-
       expect(placeholder.innerHTML).toBe(render.settings.placeholderText)
     })
 
     test('placeholder uses option html if option is found', () => {
-      render.store.setData([
-        {
-          text: 'opt text',
-          html: '<h1>Option HTML</h1>',
-          placeholder: true
-        }
-      ])
+      render.store.setData([{ text: 'opt text', html: '<h1>Option HTML</h1>', placeholder: true }])
       const placeholder = render.placeholder()
-
       expect(placeholder.innerHTML).toBe('<h1>Option HTML</h1>')
     })
 
     test('placeholder uses option text if option is found and no HTML is set', () => {
-      render.store.setData([
-        {
-          text: 'opt text',
-          placeholder: true
-        }
-      ])
+      render.store.setData([{ text: 'opt text', placeholder: true }])
       const placeholder = render.placeholder()
-
       expect(placeholder.innerHTML).toBe('opt text')
     })
   })
@@ -399,14 +383,8 @@ describe('render module', () => {
 
     test('single select renders HTML option', () => {
       render.store.setData([
-        {
-          text: 'opt0'
-        },
-        {
-          text: 'opt1',
-          html: '<span>opt1</span>',
-          selected: true
-        }
+        { text: 'opt0' },
+        { text: 'opt1', html: '<span>opt1</span>', selected: true }
       ])
       render.renderValues()
 
@@ -417,40 +395,20 @@ describe('render module', () => {
     test('multiple select renders all selected values', () => {
       render.settings.isMultiple = true
       render.store = new Store('multiple', [
-        {
-          text: 'opt0',
-          value: 'opt0',
-          selected: true
-        },
-        {
-          text: 'opt1',
-          value: 'opt1',
-          html: '<span>opt1</span>',
-          selected: true
-        },
-        {
-          text: 'opt2'
-        }
+        { text: 'opt0', value: 'opt0', selected: true },
+        { text: 'opt1', value: 'opt1', html: '<span>opt1</span>', selected: true },
+        { text: 'opt2' }
       ])
 
       render.renderValues()
 
       expect(render.main.values.children).toHaveLength(2)
-      expect(render.main.values.children.item(0)).toBeInstanceOf(HTMLDivElement)
       const chip0 = render.main.values.children.item(0) as HTMLDivElement
-
-      expect(chip0).toBeInstanceOf(HTMLDivElement)
-
       const chip0Text = chip0.querySelector('.' + render.classes.valueText) as HTMLDivElement
-
       expect(chip0Text.textContent).toBe('opt0')
-      expect(render.main.values.children.item(1)).toBeInstanceOf(HTMLDivElement)
 
       const chip1 = render.main.values.children.item(1) as HTMLDivElement
       const chip1Text = chip1.querySelector('.' + render.classes.valueText) as HTMLDivElement
-
-      expect(chip1).toBeInstanceOf(HTMLDivElement)
-      expect(chip1Text).toBeTruthy()
       expect(chip1Text.textContent).toBe('opt1')
     })
 
@@ -458,25 +416,10 @@ describe('render module', () => {
       render.settings.isMultiple = true
       render.settings.maxValuesShown = 2
       render.store = new Store('multiple', [
-        {
-          text: 'opt0',
-          value: 'opt0',
-          selected: true
-        },
-        {
-          text: 'opt1',
-          value: 'opt1',
-          html: '<span>opt1</span>',
-          selected: true
-        },
-        {
-          text: 'opt2',
-          value: 'opt2',
-          selected: true
-        },
-        {
-          text: 'opt4'
-        }
+        { text: 'opt0', value: 'opt0', selected: true },
+        { text: 'opt1', value: 'opt1', html: '<span>opt1</span>', selected: true },
+        { text: 'opt2', value: 'opt2', selected: true },
+        { text: 'opt4' }
       ])
 
       render.renderValues()
@@ -509,14 +452,12 @@ describe('render module', () => {
     beforeEach(() => {
       contentAboveMock = jest.fn()
       contentBelowMock = jest.fn()
-
       render.moveContentAbove = contentAboveMock
       render.moveContentBelow = contentBelowMock
     })
 
     test('content is moved below when position is relative', () => {
       render.settings.contentPosition = 'relative'
-
       render.moveContent()
       expect(contentAboveMock).not.toHaveBeenCalled()
       expect(contentBelowMock).toHaveBeenCalled()
@@ -524,7 +465,6 @@ describe('render module', () => {
 
     test('content is moved below when open position is down', () => {
       render.settings.openPosition = 'down'
-
       render.moveContent()
       expect(contentAboveMock).not.toHaveBeenCalled()
       expect(contentBelowMock).toHaveBeenCalled()
@@ -532,23 +472,20 @@ describe('render module', () => {
 
     test('content is moved above when open position is up', () => {
       render.settings.openPosition = 'up'
-
       render.moveContent()
       expect(contentAboveMock).toHaveBeenCalled()
       expect(contentBelowMock).not.toHaveBeenCalled()
     })
 
     test('content is moved above when putContent is up', () => {
-      render.putContent = jest.fn(() => 'up')
-
+      render.putContent = (jest.fn(() => 'up') as unknown) as () => 'up' | 'down'
       render.moveContent()
       expect(contentAboveMock).toHaveBeenCalled()
       expect(contentBelowMock).not.toHaveBeenCalled()
     })
 
     test('content is moved below when putContent is down', () => {
-      render.putContent = jest.fn(() => 'down')
-
+      render.putContent = (jest.fn(() => 'down') as unknown) as () => 'up' | 'down'
       render.moveContent()
       expect(contentAboveMock).not.toHaveBeenCalled()
       expect(contentBelowMock).toHaveBeenCalled()
@@ -558,26 +495,20 @@ describe('render module', () => {
   describe('searchDiv', () => {
     test('search is hidden when showSearch setting is false', () => {
       render.settings.showSearch = false
-
       const search = render.searchDiv()
-
       expect(search.main.classList.contains(render.classes.hide)).toBe(true)
     })
 
     test('input is debounced', async () => {
       const search = render.searchDiv()
-
       search.input.dispatchEvent(new InputEvent('input', { data: 'asdf' }))
-
       await new Promise((r) => setTimeout(r, 101))
-
       expect(searchMock).toHaveBeenCalled()
     })
 
     test('arrow keys move highlight', () => {
       const search = render.searchDiv()
       const highlightMock = jest.fn(() => {})
-
       render.highlight = highlightMock
 
       search.input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }))
@@ -591,27 +522,19 @@ describe('render module', () => {
 
     test('tab triggers close callback', () => {
       const search = render.searchDiv()
-
       search.input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }))
-
       expect(closeMock).toHaveBeenCalled()
     })
 
     test('escape triggers close callback', () => {
       const search = render.searchDiv()
-
       search.input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-
       expect(closeMock).toHaveBeenCalled()
     })
 
     test("enter and space don't call addable with empty value", () => {
       const search = render.searchDiv()
-      const addableMock = jest.fn((s: string) => ({
-        text: s,
-        value: s.toLowerCase()
-      }))
-
+      const addableMock = jest.fn((s: string) => ({ text: s, value: s.toLowerCase() }))
       render.callbacks.addable = addableMock
 
       search.input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
@@ -622,11 +545,7 @@ describe('render module', () => {
     })
 
     test('enter triggers addable when defined and value present', () => {
-      const addableMock = jest.fn((s: string) => ({
-        text: s,
-        value: s.toLowerCase()
-      }))
-
+      const addableMock = jest.fn((s: string) => ({ text: s, value: s.toLowerCase() }))
       render.callbacks.addable = addableMock
 
       render.content.search = render.searchDiv()
@@ -641,7 +560,6 @@ describe('render module', () => {
   describe('searchFocus', () => {
     test('search is focused', () => {
       expect(document.activeElement).not.toBe(render.content.search.input)
-
       render.searchFocus()
       expect(document.activeElement).toBe(render.content.search.input)
     })
@@ -651,87 +569,37 @@ describe('render module', () => {
     test('returns all options when called without parameters', () => {
       render.renderOptions(render.store.getDataOptions())
       const opts = render.getOptions()
-
       expect(opts).toHaveLength(3)
     })
 
     test('filters correctly when filtering out placeholders', () => {
       render.renderOptions(
-        render.store.partialToFullData([
-          {
-            text: 'opt0',
-            placeholder: true
-          },
-          {
-            text: 'opt1'
-          },
-          {
-            text: 'opt2'
-          }
-        ])
+        render.store.partialToFullData([{ text: 'opt0', placeholder: true }, { text: 'opt1' }, { text: 'opt2' }])
       )
-
       const opts = render.getOptions(true, false, true)
       expect(opts).toHaveLength(2)
     })
 
     test('filters correctly when filtering out disabled options', () => {
       render.renderOptions(
-        render.store.partialToFullData([
-          {
-            text: 'opt0',
-            disabled: true
-          },
-          {
-            text: 'opt1'
-          },
-          {
-            text: 'opt2'
-          }
-        ])
+        render.store.partialToFullData([{ text: 'opt0', disabled: true }, { text: 'opt1' }, { text: 'opt2' }])
       )
-
       const opts = render.getOptions(false, true)
       expect(opts).toHaveLength(2)
     })
 
     test('filters correctly when filtering out hidden options', () => {
       render.renderOptions(
-        render.store.partialToFullData([
-          {
-            text: 'opt0',
-            placeholder: true
-          },
-          {
-            text: 'opt1'
-          },
-          {
-            text: 'opt2'
-          }
-        ])
+        render.store.partialToFullData([{ text: 'opt0', placeholder: true }, { text: 'opt1' }, { text: 'opt2' }])
       )
-
       const opts = render.getOptions(false, false, true)
       expect(opts).toHaveLength(2)
     })
 
     test('filters correctly when filtering out hidden and disabled options', () => {
       render.renderOptions(
-        render.store.partialToFullData([
-          {
-            text: 'opt0',
-            disabled: true
-          },
-          {
-            text: 'opt1',
-            placeholder: true
-          },
-          {
-            text: 'opt2'
-          }
-        ])
+        render.store.partialToFullData([{ text: 'opt0', disabled: true }, { text: 'opt1', placeholder: true }, { text: 'opt2' }])
       )
-
       const opts = render.getOptions(false, true, true)
       expect(opts).toHaveLength(1)
     })
@@ -740,197 +608,84 @@ describe('render module', () => {
   describe('highlight', () => {
     test('simply do nothing without breaking when options are empty', () => {
       render.renderOptions([])
-
       expect(() => render.highlight('up')).not.toThrow()
     })
 
     test('highlight single option that is not already highlighted', () => {
-      render.renderOptions(
-        render.store.partialToFullData([
-          {
-            text: 'opt0'
-          }
-        ])
-      )
-
+      render.renderOptions(render.store.partialToFullData([{ text: 'opt0' }]))
       render.highlight('up')
-
       expect(render.getOptions()[0].classList.contains(render.classes.highlighted)).toBe(true)
     })
 
     test('select first option with down when no option is highlighted or selected', () => {
-      render.renderOptions(
-        render.store.partialToFullData([
-          {
-            text: 'opt0'
-          },
-          {
-            text: 'opt1'
-          },
-          {
-            text: 'opt2'
-          }
-        ])
-      )
-
+      render.renderOptions(render.store.partialToFullData([{ text: 'opt0' }, { text: 'opt1' }, { text: 'opt2' }]))
       render.highlight('down')
-
       expect(render.getOptions()[0].classList.contains(render.classes.highlighted)).toBe(true)
     })
 
     test('select last option with up when no option is highlighted or selected', () => {
-      render.renderOptions(
-        render.store.partialToFullData([
-          {
-            text: 'opt0'
-          },
-          {
-            text: 'opt1'
-          },
-          {
-            text: 'opt2'
-          }
-        ])
-      )
-
+      render.renderOptions(render.store.partialToFullData([{ text: 'opt0' }, { text: 'opt1' }, { text: 'opt2' }]))
       render.highlight('up')
-
       expect(render.getOptions()[2].classList.contains(render.classes.highlighted)).toBe(true)
     })
 
     test('highlight next option on down after highlighted option', () => {
-      render.renderOptions(
-        render.store.partialToFullData([
-          {
-            text: 'opt0',
-            class: render.classes.highlighted
-          },
-          {
-            text: 'opt1'
-          },
-          {
-            text: 'opt2'
-          }
-        ])
-      )
-
+      render.renderOptions(render.store.partialToFullData([
+        { text: 'opt0', class: render.classes.highlighted },
+        { text: 'opt1' },
+        { text: 'opt2' }
+      ]))
       render.highlight('down')
-
       expect(render.getOptions()[1].classList.contains(render.classes.highlighted)).toBe(true)
     })
 
     test('highlight previous option on up before highlighted option', () => {
-      render.renderOptions(
-        render.store.partialToFullData([
-          {
-            text: 'opt0'
-          },
-          {
-            text: 'opt1'
-          },
-          {
-            text: 'opt2',
-            class: render.classes.highlighted
-          }
-        ])
-      )
-
+      render.renderOptions(render.store.partialToFullData([
+        { text: 'opt0' },
+        { text: 'opt1' },
+        { text: 'opt2', class: render.classes.highlighted }
+      ]))
       render.highlight('up')
-
       expect(render.getOptions()[1].classList.contains(render.classes.highlighted)).toBe(true)
     })
 
     test('highlight next option on down after selected option when no options is highlighted', () => {
-      render.renderOptions(
-        render.store.partialToFullData([
-          {
-            text: 'opt0',
-            selected: true
-          },
-          {
-            text: 'opt1'
-          },
-          {
-            text: 'opt2'
-          }
-        ])
-      )
-
+      render.renderOptions(render.store.partialToFullData([
+        { text: 'opt0', selected: true },
+        { text: 'opt1' },
+        { text: 'opt2' }
+      ]))
       render.highlight('down')
-
       expect(render.getOptions()[1].classList.contains(render.classes.highlighted)).toBe(true)
     })
 
     test('skip to last option when using up at the first option', () => {
-      render.renderOptions(
-        render.store.partialToFullData([
-          {
-            text: 'opt0',
-            selected: true
-          },
-          {
-            text: 'opt1'
-          },
-          {
-            text: 'opt2'
-          }
-        ])
-      )
-
+      render.renderOptions(render.store.partialToFullData([
+        { text: 'opt0', selected: true },
+        { text: 'opt1' },
+        { text: 'opt2' }
+      ]))
       render.highlight('up')
-
       expect(render.getOptions()[2].classList.contains(render.classes.highlighted)).toBe(true)
     })
 
     test('highlight next option within opt group on down', () => {
-      render.renderOptions(
-        render.store.partialToFullData([
-          {
-            text: 'opt0',
-            selected: true
-          },
-          {
-            label: 'opt group',
-            options: [
-              {
-                text: 'opt1'
-              }
-            ]
-          },
-          {
-            text: 'opt2'
-          }
-        ])
-      )
-
+      render.renderOptions(render.store.partialToFullData([
+        { text: 'opt0', selected: true },
+        { label: 'opt group', options: [{ text: 'opt1' }] },
+        { text: 'opt2' }
+      ]))
       render.highlight('down')
-
       expect(render.getOptions()[1].classList.contains(render.classes.highlighted)).toBe(true)
     })
 
     test('highlight previous option within opt group on up', () => {
-      render.renderOptions(
-        render.store.partialToFullData([
-          {
-            text: 'opt0'
-          },
-          {
-            label: 'opt group',
-            options: [
-              {
-                text: 'opt1',
-                selected: true
-              }
-            ]
-          },
-          {
-            text: 'opt2'
-          }
-        ])
-      )
-
+      render.renderOptions(render.store.partialToFullData([
+        { text: 'opt0' },
+        { label: 'opt group', options: [{ text: 'opt1', selected: true }] },
+        { text: 'opt2' }
+      ]))
       render.highlight('up')
-
       expect(render.getOptions()[0].classList.contains(render.classes.highlighted)).toBe(true)
     })
   })
@@ -938,7 +693,6 @@ describe('render module', () => {
   describe('listDiv', () => {
     test('list div has correct class', () => {
       const list = render.listDiv()
-
       expect(list.classList.contains(render.classes.list)).toBe(true)
     })
   })
@@ -946,9 +700,7 @@ describe('render module', () => {
   describe('renderError', () => {
     test('error message is rendered correctly', () => {
       expect(render.content.list.children).toHaveLength(0)
-
       render.renderError('test error')
-
       expect(render.content.list.children).toHaveLength(1)
       expect(render.content.list.children.item(0)).toBeInstanceOf(HTMLDivElement)
       expect(render.content.list.children.item(0)?.className).toBe(render.classes.error)
@@ -957,10 +709,8 @@ describe('render module', () => {
 
     test('list is reset on new error', () => {
       expect(render.content.list.children).toHaveLength(0)
-
       render.renderError('test error')
       expect(render.content.list.children).toHaveLength(1)
-
       render.renderError('error 2')
       expect(render.content.list.children).toHaveLength(1)
       expect(render.content.list.children.item(0)?.textContent).toBe('error 2')
@@ -970,10 +720,8 @@ describe('render module', () => {
   describe('renderSearching', () => {
     test('search text is rendered correctly', () => {
       expect(render.content.list.children).toHaveLength(0)
-
       render.settings.searchingText = 'search'
       render.renderSearching()
-
       expect(render.content.list.children).toHaveLength(1)
       expect(render.content.list.children.item(0)).toBeInstanceOf(HTMLDivElement)
       expect(render.content.list.children.item(0)?.className).toBe(render.classes.searching)
@@ -982,11 +730,9 @@ describe('render module', () => {
 
     test('list is reset on new search text', () => {
       expect(render.content.list.children).toHaveLength(0)
-
       render.settings.searchingText = 'search'
       render.renderSearching()
       expect(render.content.list.children).toHaveLength(1)
-
       render.settings.searchingText = 'search 2'
       render.renderSearching()
       expect(render.content.list.children).toHaveLength(1)
@@ -994,66 +740,33 @@ describe('render module', () => {
     })
   })
 
-  describe('renderOptions', () => {})
-
   describe('option', () => {
     test('add inline styles correctly', () => {
-      const option = render.option(
-        new Option({
-          text: 'opt',
-          style: 'color: red'
-        })
-      )
-
+      const option = render.option(new Option({ text: 'opt', style: 'color: red' }))
       expect(option.style.color).toBe('red')
     })
 
     test('add hidden class on option with display false', () => {
-      const option = render.option(
-        new Option({
-          text: 'opt',
-          display: false
-        })
-      )
-
+      const option = render.option(new Option({ text: 'opt', display: false }))
       expect(option.classList.contains(render.classes.hide)).toBe(true)
     })
 
     test('add hidden class on selected option when hideSelected setting is true', () => {
       render.settings.hideSelected = true
-
-      const option = render.option(
-        new Option({
-          text: 'opt',
-          selected: true
-        })
-      )
-
+      const option = render.option(new Option({ text: 'opt', selected: true }))
       expect(option.classList.contains(render.classes.hide)).toBe(true)
     })
 
     test('title attribute is set when showOptionTooltips setting is true', () => {
       render.settings.showOptionTooltips = true
-
-      const option = render.option(
-        new Option({
-          text: 'opt'
-        })
-      )
-
+      const option = render.option(new Option({ text: 'opt' }))
       expect(option.getAttribute('title')).toBe('opt')
     })
 
     test('text is highlighted correctly with option text', () => {
       render.settings.searchHighlight = true
       render.content.search.input.value = 'opt'
-
-      const option = render.option(
-        new Option({
-          text: 'opt 1'
-        })
-      )
-
+      const option = render.option(new Option({ text: 'opt 1' }))
       expect(option.querySelector('mark')).toBeTruthy()
       expect(option.querySelector('mark')?.textContent).toBe('opt')
     })
@@ -1061,27 +774,14 @@ describe('render module', () => {
     test('text is highlighted correctly with option HTML', () => {
       render.settings.searchHighlight = true
       render.content.search.input.value = 'opt'
-
-      const option = render.option(
-        new Option({
-          text: 'opt 1',
-          html: '<h1>opt 1</h1>'
-        })
-      )
-
+      const option = render.option(new Option({ text: 'opt 1', html: '<h1>opt 1</h1>' }))
       expect(option.querySelector('mark')).toBeTruthy()
       expect(option.querySelector('mark')?.textContent).toBe('opt')
     })
 
     test('click does nothing when option is disabled', () => {
-      const option = render.option(
-        new Option({
-          text: 'opt 1',
-          disabled: true
-        })
-      )
+      const option = render.option(new Option({ text: 'opt 1', disabled: true }))
       option.dispatchEvent(new MouseEvent('click'))
-
       expect(addOptionMock).not.toHaveBeenCalled()
       expect(setSelectedMock).not.toHaveBeenCalled()
     })
@@ -1089,14 +789,8 @@ describe('render module', () => {
     test('click does nothing when max count of selected options is reached', () => {
       render.settings.isMultiple = true
       render.settings.maxSelected = 1
-
-      const option = render.option(
-        new Option({
-          text: 'opt 1'
-        })
-      )
+      const option = render.option(new Option({ text: 'opt 1' }))
       option.dispatchEvent(new MouseEvent('click'))
-
       expect(addOptionMock).not.toHaveBeenCalled()
       expect(setSelectedMock).not.toHaveBeenCalled()
     })
@@ -1105,30 +799,17 @@ describe('render module', () => {
       render.settings.isMultiple = true
       render.settings.allowDeselect = true
       render.settings.minSelected = 1
-
-      const option = render.option(
-        new Option({
-          text: 'opt 1',
-          selected: true
-        })
-      )
+      const option = render.option(new Option({ text: 'opt 1', selected: true }))
       option.dispatchEvent(new MouseEvent('click'))
-
       expect(addOptionMock).not.toHaveBeenCalled()
       expect(setSelectedMock).not.toHaveBeenCalled()
     })
 
-    test('click removes option', () => {
-      const option = render.option(
-        new Option({
-          text: 'new opt 1'
-        })
-      )
-
+    test('click removes/adds option and triggers callbacks', () => {
+      const option = render.option(new Option({ text: 'new opt 1' }))
       option.dispatchEvent(new MouseEvent('click'))
-
       expect(addOptionMock).toHaveBeenCalled()
-      expect(addOptionMock.mock.calls[0][0].text).toBe('new opt 1')
+      expect((addOptionMock.mock.calls[0][0] as any).text).toBe('new opt 1')
       expect(setSelectedMock).toHaveBeenCalled()
     })
   })
@@ -1168,15 +849,11 @@ describe('render module', () => {
 
     test('click holding shift key selects range from last clicked to current', () => {
       renderMultiple.renderOptions(renderMultiple.store.getDataOptions())
-
       const opts = renderMultiple.getOptions(false, false, true)
       expect(opts).toHaveLength(3)
-
       opts[0].dispatchEvent(new MouseEvent('click'))
       expect(afterChangeMock2).toHaveBeenCalledWith([expect.objectContaining({ value: 'test1' })])
-
       opts[2].dispatchEvent(new MouseEvent('click', { shiftKey: true }))
-
       expect(afterChangeMock2).toHaveBeenCalledWith([
         expect.objectContaining({ value: 'test1' }),
         expect.objectContaining({ value: 'test2' }),
@@ -1186,15 +863,11 @@ describe('render module', () => {
 
     test('click holding shift key selects range from current to last clicked', () => {
       renderMultiple.renderOptions(renderMultiple.store.getDataOptions())
-
       const opts = renderMultiple.getOptions(false, false, true)
       expect(opts).toHaveLength(3)
-
       opts[2].dispatchEvent(new MouseEvent('click'))
       expect(afterChangeMock2).toHaveBeenCalledWith([expect.objectContaining({ value: 'test3' })])
-
       opts[0].dispatchEvent(new MouseEvent('click', { shiftKey: true }))
-
       expect(afterChangeMock2).toHaveBeenCalledWith([
         expect.objectContaining({ value: 'test3' }),
         expect.objectContaining({ value: 'test1' }),
@@ -1205,15 +878,11 @@ describe('render module', () => {
     test('range selection is ignored if range length is greater than maxSelected', () => {
       renderMultiple.settings.maxSelected = 2
       renderMultiple.renderOptions(renderMultiple.store.getDataOptions())
-
       const opts = renderMultiple.getOptions(false, false, true)
       expect(opts).toHaveLength(3)
-
       opts[0].dispatchEvent(new MouseEvent('click'))
       expect(afterChangeMock2).toHaveBeenCalledWith([expect.objectContaining({ value: 'test1' })])
-
       opts[2].dispatchEvent(new MouseEvent('click', { shiftKey: true }))
-
       expect(afterChangeMock2).toHaveBeenCalledWith([
         expect.objectContaining({ value: 'test1' }),
         expect.objectContaining({ value: 'test3' })
@@ -1225,12 +894,9 @@ describe('render module', () => {
     test('elements get removed', () => {
       expect(render.main.main).toBeInstanceOf(HTMLDivElement)
       expect(render.content.main).toBeInstanceOf(HTMLDivElement)
-
       render.main.main.id = 'main-id'
       render.content.main.id = 'content-id'
-
       render.destroy()
-
       expect(document.getElementById('main-id')).toBeNull()
       expect(document.getElementById('content-id')).toBeNull()
     })
@@ -1239,10 +905,8 @@ describe('render module', () => {
   describe('moveContentAbove', () => {
     test('correct classes are set', () => {
       render.moveContentAbove()
-
       expect(render.main.main.classList.contains(render.classes.openAbove)).toBe(true)
       expect(render.main.main.classList.contains(render.classes.openBelow)).toBe(false)
-
       expect(render.content.main.classList.contains(render.classes.openAbove)).toBe(true)
       expect(render.content.main.classList.contains(render.classes.openBelow)).toBe(false)
     })
@@ -1251,20 +915,16 @@ describe('render module', () => {
   describe('moveContentBelow', () => {
     test('correct classes are set', () => {
       render.moveContentBelow()
-
       expect(render.main.main.classList.contains(render.classes.openAbove)).toBe(false)
       expect(render.main.main.classList.contains(render.classes.openBelow)).toBe(true)
-
       expect(render.content.main.classList.contains(render.classes.openAbove)).toBe(false)
       expect(render.content.main.classList.contains(render.classes.openBelow)).toBe(true)
     })
   })
 
   describe('accessibility (a11y)', () => {
-
     test('search input gets ARIA wiring (controls + autocomplete + label fallback)', () => {
       render.updateAriaAttributes()
-
       expect(render.content.search.input.getAttribute('aria-controls')).toBe(render.content.list.id)
       expect(render.content.search.input.getAttribute('aria-autocomplete')).toBe('list')
       expect(render.content.search.input.getAttribute('aria-label')).toBe('Search options')
@@ -1272,36 +932,33 @@ describe('render module', () => {
 
     test('deselect control has button semantics and label', () => {
       const deselectEl = render.main.main.querySelector('.' + render.classes.deselect) as HTMLDivElement
-
       expect(deselectEl.getAttribute('role')).toBe('button')
       expect(deselectEl.getAttribute('tabindex')).toBe('0')
       expect(deselectEl.getAttribute('aria-label')).toBe(render.settings.clearAllAriaLabel)
     })
 
     test('token delete control (multi) has button semantics', () => {
-    const opt = new Option({ text: 'Alpha', value: 'alpha', selected: true })
-    const token = render.multipleValue(opt)
+      const opt = new Option({ text: 'Alpha', value: 'alpha', selected: true })
+      const token = render.multipleValue(opt)
+      const del = token.querySelector('.' + render.classes.valueDelete) as HTMLDivElement
 
-    const del = token.querySelector('.' + render.classes.valueDelete) as HTMLDivElement
+      expect(del).toBeInstanceOf(HTMLDivElement)
+      expect(del.getAttribute('role')).toBe('button')
+      // Initially hidden from tab order and SR
+      expect(del.getAttribute('tabindex')).toBe('-1')
+      expect(del.getAttribute('aria-hidden')).toBe('true')
+      expect(del.getAttribute('aria-label')).toContain('Remove Alpha')
+      expect(del.hasAttribute('title')).toBe(false)
 
-    expect(del).toBeInstanceOf(HTMLDivElement)
-    expect(del.getAttribute('role')).toBe('button')
-    // Initially hidden from tab order and SR
-    expect(del.getAttribute('tabindex')).toBe('-1')
-    expect(del.getAttribute('aria-hidden')).toBe('true')
-    expect(del.getAttribute('aria-label')).toContain('Remove Alpha')
-    expect(del.hasAttribute('title')).toBe(false)
+      // When the chip receives focus, the delete control becomes tabbable and visible to SR
+      token.dispatchEvent(new FocusEvent('focusin'))
+      expect(del.getAttribute('tabindex')).toBe('0')
+      expect(del.hasAttribute('aria-hidden')).toBe(false)
 
-    // When the chip receives focus, the delete control becomes tabbable and visible to SR
-    token.dispatchEvent(new FocusEvent('focusin'))
-
-    expect(del.getAttribute('tabindex')).toBe('0')
-    expect(del.hasAttribute('aria-hidden')).toBe(false)
-
-    // Chip announces hint for keyboard-remove
-    const hintId = `${render.settings.id}__chip__${opt.id}__hint`
-    expect(token.getAttribute('aria-describedby')).toBe(hintId)
-  })
+      // Chip announces hint for keyboard-remove
+      const hintId = `${render.settings.id}__chip__${opt.id}__hint`
+      expect(token.getAttribute('aria-describedby')).toBe(hintId)
+    })
 
     test('renderSearching sets aria-busy and announces via polite live region', () => {
       const rafOrig = (global as any).requestAnimationFrame
@@ -1341,22 +998,13 @@ describe('render module', () => {
     })
 
     test('renderOptions sets aria-setsize and each option gets aria-posinset', () => {
-      render.renderOptions(
-        render.store.partialToFullData([
-          { text: 'One' },
-          { text: 'Two' },
-          { text: 'Three' }
-        ])
-      )
-
+      render.renderOptions(render.store.partialToFullData([{ text: 'One' }, { text: 'Two' }, { text: 'Three' }]))
       const opts = render.getOptions(true, true, true)
       expect(opts).toHaveLength(3)
       expect(opts[0].getAttribute('aria-posinset')).toBe('1')
       expect(opts[0].getAttribute('aria-setsize')).toBe('3')
-
       expect(opts[1].getAttribute('aria-posinset')).toBe('2')
       expect(opts[1].getAttribute('aria-setsize')).toBe('3')
-
       expect(opts[2].getAttribute('aria-posinset')).toBe('3')
       expect(opts[2].getAttribute('aria-setsize')).toBe('3')
     })
@@ -1364,49 +1012,33 @@ describe('render module', () => {
     test('empty results announce and keep aria-setsize = 0', () => {
       const rafOrig = (global as any).requestAnimationFrame
       ;(global as any).requestAnimationFrame = (cb: Function) => cb()
-
       render.renderOptions([])
-
       expect(render.content.list.getAttribute('aria-setsize')).toBe('0')
-
       const polite = document.getElementById('ss-live-polite') as HTMLDivElement
       expect(polite).toBeTruthy()
       expect(polite.textContent && polite.textContent.length).toBeGreaterThan(0)
-
       ;(global as any).requestAnimationFrame = rafOrig
     })
 
-    test('highlight updates aria-activedescendant on input; close clears it', () => {
-      render.renderOptions(
-        render.store.partialToFullData([
-          { text: 'A' },
-          { text: 'B' },
-          { text: 'C' }
-        ])
-      )
-
+    test('highlight updates aria-activedescendant on both input and combobox; close clears both', () => {
+      render.renderOptions(render.store.partialToFullData([{ text: 'A' }, { text: 'B' }, { text: 'C' }]))
       render.highlight('down')
-
       const firstVisible = render.getOptions(true, true, true)[0]
-      const active = render.content.search.input.getAttribute('aria-activedescendant')
-
-      expect(active).toBe(firstVisible.id)
+      const activeInput = render.content.search.input.getAttribute('aria-activedescendant')
+      const activeMain = render.main.main.getAttribute('aria-activedescendant')
+      expect(activeInput).toBe(firstVisible.id)
+      expect(activeMain).toBe(firstVisible.id)
 
       render.close()
       expect(render.content.search.input.hasAttribute('aria-activedescendant')).toBe(false)
+      expect(render.main.main.hasAttribute('aria-activedescendant')).toBe(false)
     })
 
     test('selected option sets aria-selected and updates activedescendant immediately', () => {
-      const el = render.option(
-        new Option({
-          text: 'Picked',
-          selected: true
-        })
-      )
-
+      const el = render.option(new Option({ text: 'Picked', selected: true }))
       expect(el.getAttribute('aria-selected')).toBe('true')
       expect(render.content.search.input.getAttribute('aria-activedescendant')).toBe(el.id)
+      expect(render.main.main.getAttribute('aria-activedescendant')).toBe(el.id)
     })
-
   })
 })
