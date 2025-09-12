@@ -43,12 +43,19 @@ export default class Render {
     store: Store;
     callbacks: Callbacks;
     private lastSelectedOption;
+    private static _livePolite;
+    private static _liveAssertive;
+    private static getLiveAssertive;
+    private _announceAssertive;
+    private clearHighlights;
     main: Main;
     content: Content;
     private scrollHandler;
     private resizeHandler;
     classes: CssClasses;
     constructor(settings: Required<Settings>, classes: Required<CssClasses>, store: Store, callbacks: Callbacks);
+    private static getLivePolite;
+    private _announcePolite;
     enable(): void;
     disable(): void;
     open(): void;
@@ -80,4 +87,5 @@ export default class Render {
     ensureElementInView(container: HTMLElement, element: HTMLElement): void;
     putContent(): 'up' | 'down';
     updateDeselectAll(): void;
+    private setActiveDescendant;
 }

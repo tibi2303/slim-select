@@ -39,6 +39,10 @@ export default class Settings {
   public maxValuesShown: number
   public maxValuesMessage: string
   public addableText: string
+  public ariaLabelledBy: string
+  public searchAriaLabel: string
+  public searchLabelledBy: string
+  public clearAllAriaLabel: string
 
   constructor(settings?: SettingsPartial) {
     if (!settings) {
@@ -53,7 +57,7 @@ export default class Settings {
     this.alwaysOpen = settings.alwaysOpen !== undefined ? settings.alwaysOpen : false
     this.showSearch = settings.showSearch !== undefined ? settings.showSearch : true
     this.focusSearch = settings.focusSearch !== undefined ? settings.focusSearch : true
-    this.ariaLabel = settings.ariaLabel || 'Combobox'
+    this.ariaLabel = settings.ariaLabel || ''
     this.searchPlaceholder = settings.searchPlaceholder || 'Search'
     this.searchText = settings.searchText || 'No Results'
     this.searchingText = settings.searchingText || 'Searching...'
@@ -74,5 +78,9 @@ export default class Settings {
     this.maxValuesShown = settings.maxValuesShown || 20
     this.maxValuesMessage = settings.maxValuesMessage || '{number} selected'
     this.addableText = settings.addableText || 'Press "Enter" to add {value}'
+    this.ariaLabelledBy = settings.ariaLabelledBy || ''
+    this.searchAriaLabel = settings.searchAriaLabel || 'Search options'
+    this.searchLabelledBy = settings.searchLabelledBy || ''
+    this.clearAllAriaLabel = settings.clearAllAriaLabel || 'Clear selection'
   }
 }

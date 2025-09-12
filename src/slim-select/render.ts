@@ -50,17 +50,43 @@ export default class Render {
   public settings: Settings
   public store: Store
   public callbacks: Callbacks
-  // Used to compute the range selection
   private lastSelectedOption: Option | null
+  private static _livePolite: HTMLDivElement | null = null
+  private static _liveAssertive: HTMLDivElement | null = null
 
-  // Elements
+  private static getLiveAssertive(): HTMLDivElement {
+    let el = document.getElementById('ss-live-assertive') as HTMLDivElement | null
+    if (!el) {
+      el = document.createElement('div')
+      el.id = 'ss-live-assertive'
+      el.setAttribute('role', 'status')
+      el.setAttribute('aria-live', 'assertive')
+      el.setAttribute('aria-atomic', 'true')
+      el.className = 'ss-sr-only'
+      document.body.appendChild(el)
+    }
+    return el
+  }
+
+  private _announceAssertive(msg: string) {
+    const el = (Render._liveAssertive ||= Render.getLiveAssertive())
+    el.textContent = ''
+    requestAnimationFrame(() => { el.textContent = msg })
+  }
+
+  private clearHighlights(): void {
+    const highlighted = this.content.list.querySelectorAll('.' + this.classes.highlighted)
+    highlighted.forEach(el => el.classList.remove(this.classes.highlighted))
+    this.content.search.input.removeAttribute('aria-activedescendant')
+    this.main.main.removeAttribute('aria-activedescendant')
+  }
+
   public main: Main
   public content: Content
 
-  private scrollHandler: (() => void) | undefined;
-  private resizeHandler: (() => void) | undefined;
+  private scrollHandler: (() => void) | undefined
+  private resizeHandler: (() => void) | undefined
 
-  // Classes
   public classes: CssClasses
 
   constructor(settings: Required<Settings>, classes: Required<CssClasses>, store: Store, callbacks: Callbacks) {
@@ -73,51 +99,58 @@ export default class Render {
     this.main = this.mainDiv()
     this.content = this.contentDiv()
 
-    // Add classes and styles to main/content
     this.updateClassStyles()
+    this.main.values.setAttribute('role', 'list')
     this.updateAriaAttributes()
 
-    // Add content to the content location settings or offcanvas-body if it exists
     const contentContainer = document
       .querySelector(`[data-id="${this.settings.id}"]`)
-      ?.closest('.offcanvas-body');
+      ?.closest('.offcanvas-body')
 
     if (contentContainer) {
-      contentContainer.appendChild(this.content.main);
+      contentContainer.appendChild(this.content.main)
     } else if (this.settings.contentLocation) {
-      this.settings.contentLocation.appendChild(this.content.main);
+      this.settings.contentLocation.appendChild(this.content.main)
     }
   }
 
-  // Remove disabled classes
-  public enable(): void {
-    // Remove disabled class
-    this.main.main.classList.remove(this.classes.disabled)
+  private static getLivePolite(): HTMLDivElement {
+    let el = document.getElementById('ss-live-polite') as HTMLDivElement | null
+    if (!el) {
+      el = document.createElement('div')
+      el.id = 'ss-live-polite'
+      el.setAttribute('role', 'status')
+      el.setAttribute('aria-live', 'polite')
+      el.setAttribute('aria-atomic', 'true')
+      el.className = 'ss-sr-only'
+      document.body.appendChild(el)
+    }
+    return el
+  }
 
-    // Set search input to "enabled"
+  private _announcePolite(msg: string) {
+    const el = (Render._livePolite ||= Render.getLivePolite())
+    el.textContent = ''
+    requestAnimationFrame(() => { el.textContent = msg })
+  }
+
+  public enable(): void {
+    this.main.main.classList.remove(this.classes.disabled)
     this.content.search.input.disabled = false
   }
 
-  // Set disabled classes
   public disable(): void {
-    // Add disabled class
     this.main.main.classList.add(this.classes.disabled)
-
-    // Set search input to disabled
     this.content.search.input.disabled = true
   }
 
   public open(): void {
     this.main.arrow.path.setAttribute('d', this.classes.arrowOpen)
-
-    // Add class to main container
     this.main.main.classList.add(this.settings.openPosition === 'up' ? this.classes.openAbove : this.classes.openBelow)
     this.main.main.setAttribute('aria-expanded', 'true')
-
-    // move the content in to the right location
+    // expanded belongs on the combobox (main), not the input
     this.moveContent()
 
-    // Move to last selected option
     const selectedOptions = this.store.getSelectedOptions()
     if (selectedOptions.length) {
       const selectedId = selectedOptions[selectedOptions.length - 1].id
@@ -126,35 +159,38 @@ export default class Render {
         this.ensureElementInView(this.content.list, selectedOption)
       }
     }
+
     if (this.settings.contentPosition === 'fixed') {
-      this.moveContent();
-
-      // Instant (non-debounced) handlers
-      this.scrollHandler = () => this.moveContent();
-      this.resizeHandler = () => this.moveContent();
-
-      window.addEventListener('scroll', this.scrollHandler, true); // capture phase
-      window.addEventListener('resize', this.resizeHandler);
+      this.moveContent()
+      this.scrollHandler = () => this.moveContent()
+      this.resizeHandler = () => this.moveContent()
+      window.addEventListener('scroll', this.scrollHandler, true)
+      window.addEventListener('resize', this.resizeHandler)
     }
+
+    this.searchFocus()
   }
 
   public close(): void {
-    this.main.main.classList.remove(this.classes.openAbove)
-    this.main.main.classList.remove(this.classes.openBelow)
+    this.main.main.classList.remove(this.classes.openAbove, this.classes.openBelow)
+    // expanded belongs on the combobox (main), not the input
+    this.content.search.input.removeAttribute('aria-expanded')
     this.main.main.setAttribute('aria-expanded', 'false')
-    this.content.main.classList.remove(this.classes.openAbove)
-    this.content.main.classList.remove(this.classes.openBelow)
+    this.content.main.classList.remove(this.classes.openAbove, this.classes.openBelow)
     this.main.arrow.path.setAttribute('d', this.classes.arrowClose)
 
     if (this.scrollHandler) {
-      window.removeEventListener('scroll', this.scrollHandler, true);
-      this.scrollHandler = undefined;
+      window.removeEventListener('scroll', this.scrollHandler, true)
+      this.scrollHandler = undefined
     }
 
     if (this.resizeHandler) {
-      window.removeEventListener('resize', this.resizeHandler);
-      this.resizeHandler = undefined;
+      window.removeEventListener('resize', this.resizeHandler)
+      this.resizeHandler = undefined
     }
+
+    this.clearHighlights()
+    this.main.main.focus({ preventScroll: true })
   }
 
   public updateClassStyles(): void {
@@ -194,12 +230,72 @@ export default class Render {
   }
 
   public updateAriaAttributes() {
-    this.main.main.role = 'combobox'
-    this.main.main.setAttribute('aria-haspopup', 'listbox')
-    this.main.main.setAttribute('aria-controls', this.content.main.id)
-    this.main.main.setAttribute('aria-expanded', 'false')
-    this.content.list.setAttribute('role', 'listbox')
-    this.content.list.setAttribute('aria-label', this.settings.contentAriaLabel)
+    this.content.list.setAttribute('role', 'listbox');
+    this.content.list.setAttribute('id', this.content.main.id + '-list');
+    this.content.list.setAttribute('aria-label', this.settings.contentAriaLabel);
+    this.main.main.setAttribute('role', 'combobox');
+    this.main.main.setAttribute('aria-controls', this.content.list.id);
+    this.main.main.setAttribute('aria-haspopup', 'listbox');
+    this.main.main.setAttribute('aria-expanded', 'false');
+    if (this.settings.isMultiple) {
+      this.content.list.setAttribute('aria-multiselectable', 'true');
+    }
+
+    this.main.main.removeAttribute('aria-labelledby');
+    this.main.main.removeAttribute('aria-label');
+
+    const input = this.content.search.input;
+    // Input is just the text entry, not a combobox
+    input.setAttribute('role', 'searchbox');
+    input.setAttribute('aria-controls', this.content.list.id);
+    input.setAttribute('aria-owns', this.content.list.id);
+    input.setAttribute('aria-autocomplete', 'list');
+    input.removeAttribute('aria-expanded');
+
+    let labelledById = (this.settings.ariaLabelledBy || '').trim();
+    let labelEl: HTMLLabelElement | null = null;
+
+    if (!labelledById) {
+      const selectEl = document.querySelector(
+        `select[data-id="${this.settings.id}"]`
+      ) as HTMLSelectElement | null;
+
+      if (selectEl) {
+        if (selectEl.id) {
+          labelEl = document.querySelector(`label[for="${selectEl.id}"]`) as HTMLLabelElement | null;
+        }
+        if (!labelEl && selectEl.previousElementSibling?.tagName === 'LABEL') {
+          labelEl = selectEl.previousElementSibling as HTMLLabelElement;
+        }
+        if (labelEl) {
+          if (!labelEl.id) {
+            labelEl.id = (selectEl.id || this.settings.id) + '-label';
+          }
+          labelledById = labelEl.id;
+        }
+      }
+    } else {
+      labelEl = document.getElementById(labelledById) as HTMLLabelElement | null;
+    }
+
+    if (labelledById && document.getElementById(labelledById)) {
+      this.main.main.setAttribute('aria-labelledby', labelledById);
+    } else if (this.settings.ariaLabel && this.settings.ariaLabel.trim()) {
+      this.main.main.setAttribute('aria-label', this.settings.ariaLabel.trim());
+    }
+
+    this.content.search.input.setAttribute('aria-controls', this.content.list.id);
+    this.content.search.input.setAttribute('aria-autocomplete', 'list');
+
+    if (labelledById && document.getElementById(labelledById)) {
+      this.content.search.input.setAttribute('aria-labelledby', labelledById);
+    } else if (this.settings.searchLabelledBy && document.getElementById(this.settings.searchLabelledBy)) {
+      this.content.search.input.setAttribute('aria-labelledby', this.settings.searchLabelledBy);
+    } else if (this.settings.searchAriaLabel) {
+      this.content.search.input.setAttribute('aria-label', this.settings.searchAriaLabel);
+    } else {
+      this.content.search.input.setAttribute('aria-label', 'Search options');
+    }
   }
 
   public mainDiv(): Main {
@@ -208,9 +304,6 @@ export default class Render {
 
     main.id = this.settings.id + '-main'
 
-    // Add label
-    main.setAttribute('aria-label', this.settings.ariaLabel)
-
     // Set tabable to allow tabbing to the element
     main.tabIndex = 0
 
@@ -218,36 +311,58 @@ export default class Render {
     // This is to allow for normal selecting
     // when you may not have a search bar
     main.onkeydown = (e: KeyboardEvent): boolean => {
-      // Convert above if else statemets to switch
+      // Only react when the shell itself has focus, not when a child (chip/delete/etc) has focus
+      if (e.target !== main) return true;
+
+      const focusAndThen = (fn: () => void) => {
+        this.callbacks.open()
+        // shift focus first so SR/VoiceOver announces the option on first key press
+        requestAnimationFrame(() => {
+          this.searchFocus()
+          fn()
+        })
+      }
+
       switch (e.key) {
-        case 'ArrowUp':
         case 'ArrowDown':
-          this.callbacks.open()
-          e.key === 'ArrowDown' ? this.highlight('down') : this.highlight('up')
+          e.preventDefault()
+          focusAndThen(() => this.highlight('down'))
+          return false
+        case 'ArrowUp':
+          e.preventDefault()
+          focusAndThen(() => this.highlight('up'))
           return false
         case 'Tab':
           this.callbacks.close()
-          return true // Continue doing normal tabbing
+          return true
         case 'Enter':
         case ' ':
-          this.callbacks.open()
-          const highlighted = this.content.list.querySelector('.' + this.classes.highlighted) as HTMLDivElement
-          if (highlighted) {
-            highlighted.click()
-          }
-          return false
-        case 'Escape':
-          this.callbacks.close()
+          e.preventDefault()
+          focusAndThen(() => {
+            const highlighted = this.content.list.querySelector('.' + this.classes.highlighted) as HTMLDivElement
+            if (highlighted) highlighted.click()
+          })
           return false
       }
 
-      // Check if they type a-z, A-Z and 0-9
-      if (e.key.length === 1) {
+      // Forward printable characters into the search input
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault()
         this.callbacks.open()
+        requestAnimationFrame(() => {
+          this.searchFocus()
+          const inp = this.content.search.input
+          const selStart = inp.selectionStart ?? inp.value.length
+          const selEnd = inp.selectionEnd ?? inp.value.length
+          inp.value = inp.value.slice(0, selStart) + e.key + inp.value.slice(selEnd)
+          inp.setSelectionRange(selStart + 1, selStart + 1)
+          this.callbacks.search(inp.value)
+        })
+        return false
       }
 
-      return true
-    }
+      return true;
+    };
 
     // Add onclick for main div
     main.onclick = (e: Event): void => {
@@ -267,6 +382,17 @@ export default class Render {
     // Add deselect
     const deselect = document.createElement('div')
     deselect.classList.add(this.classes.deselect)
+
+    deselect.setAttribute('role', 'button');
+    deselect.setAttribute('tabindex', '0');
+    deselect.setAttribute('aria-label', this.settings.clearAllAriaLabel);
+    deselect.addEventListener('keydown', (e: KeyboardEvent) => { // ADD
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        e.stopPropagation();
+        deselect.click();
+      }
+    });
 
     // Check if deselect is to be shown or not
     const selectedOptions = this.store?.getSelectedOptions()
@@ -322,6 +448,8 @@ export default class Render {
     // Add deselect svg
     const deselectSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
     deselectSvg.setAttribute('viewBox', '0 0 100 100')
+    deselectSvg.setAttribute('aria-hidden', 'true')
+    deselectSvg.setAttribute('focusable', 'false')
     const deselectPath = document.createElementNS('http://www.w3.org/2000/svg', 'path')
     deselectPath.setAttribute('d', this.classes.deselectPath)
     deselectSvg.appendChild(deselectPath)
@@ -332,6 +460,8 @@ export default class Render {
     const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
     arrow.classList.add(this.classes.arrow)
     arrow.setAttribute('viewBox', '0 0 100 100')
+    arrow.setAttribute('aria-hidden', 'true')
+    arrow.setAttribute('focusable', 'false')
     const arrowPath = document.createElementNS('http://www.w3.org/2000/svg', 'path')
     arrowPath.setAttribute('d', this.classes.arrowClose)
     if (this.settings.alwaysOpen) {
@@ -386,6 +516,7 @@ export default class Render {
     const placeholder = document.createElement('div')
     placeholder.classList.add(this.classes.placeholder)
     placeholder.innerHTML = placeholderText
+    placeholder.setAttribute('aria-hidden', 'true');
     return placeholder
   }
 
@@ -408,6 +539,7 @@ export default class Render {
       return o.selected && !o.placeholder
     }, false) as Option[]
     const selectedSingle = selected.length > 0 ? selected[0] : null
+    this.main.values.removeAttribute('role');
 
     // If nothing is seleected use settings placeholder text
     if (!selectedSingle) {
@@ -444,9 +576,11 @@ export default class Render {
 
     // If selectedOptions is empty set placeholder
     if (selectedOptions.length === 0) {
+      this.main.values.removeAttribute('role'); 
       this.main.values.innerHTML = this.placeholder().outerHTML
       return
     } else {
+      this.main.values.setAttribute('role', 'list');
       // If there is a placeholder, remove it
       const placeholder = this.main.values.querySelector('.' + this.classes.placeholder)
       if (placeholder) {
@@ -535,100 +669,139 @@ export default class Render {
   }
 
   public multipleValue(option: Option): HTMLDivElement {
-    const value = document.createElement('div')
-    value.classList.add(this.classes.value)
-    value.dataset.id = option.id
+    const value = document.createElement('div');
+    value.classList.add(this.classes.value);
+    value.dataset.id = option.id;
 
-    const text = document.createElement('div')
-    text.classList.add(this.classes.valueText)
-    text.textContent = option.text // For multiple values always use text
-    value.appendChild(text)
+    // Make each chip a focusable list item; keep its spoken name clean (no "remove" text here)
+    value.setAttribute('role', 'listitem');
+    value.tabIndex = 0;
+    value.setAttribute('aria-label', option.text);
 
-    // Only add deletion if the option is not mandatory
+    // Chip visible text
+    const text = document.createElement('div');
+    text.classList.add(this.classes.valueText);
+    text.textContent = option.text; // For multiple values always use text
+    value.appendChild(text);
+
+    let deleteDiv: HTMLDivElement | null = null;
+
     if (!option.mandatory) {
-      // Create delete div element
-      const deleteDiv = document.createElement('div')
-      deleteDiv.classList.add(this.classes.valueDelete)
-      deleteDiv.setAttribute('tabindex', '0')  // Make the div focusable for tab navigation
+      // SR-only hint announced when the chip gets focus (tells users how to remove)
+      const hintId = `${this.settings.id}__chip__${option.id}__hint`;
+      const hint = document.createElement('span');
+      hint.id = hintId;
+      hint.className = 'ss-sr-only'; // ensure this class is NOT display:none
+      hint.textContent = 'Press Delete or Backspace to remove.';
+      value.appendChild(hint);
 
-      // Add delete onclick event
+      // Create delete control (hidden from a11y until chip focus)
+      deleteDiv = document.createElement('div');
+      deleteDiv.classList.add(this.classes.valueDelete);
+      deleteDiv.setAttribute('role', 'button');
+      deleteDiv.setAttribute('aria-label', `Remove ${option.text}`);
+      deleteDiv.setAttribute('aria-hidden', 'true'); // hidden from SR until chip is focused
+      deleteDiv.tabIndex = -1; // not tabbable until chip focus
+
       deleteDiv.onclick = (e: Event) => {
-        e.preventDefault()
-        e.stopPropagation()
+        e.preventDefault();
+        e.stopPropagation();
 
-        // Dont do anything if disabled
-        if (this.settings.disabled) {
-          return
-        }
+        if (this.settings.disabled) return;
 
-        // By Default we will delete
-        let shouldDelete = true
-        const before = this.store.getSelectedOptions()
-        const after = before.filter((o) => {
-          return o.selected && o.id !== option.id
-        }, true)
+        let shouldDelete = true;
+        const before = this.store.getSelectedOptions();
+        const after = before.filter((o) => o.selected && o.id !== option.id, true);
 
-        // Check if minSelected is set and if after length so, return
         if (this.settings.minSelected && after.length < this.settings.minSelected) {
-          return
+          return;
         }
 
-        // If there is a beforeDeselect function run it
         if (this.callbacks.beforeChange) {
-          shouldDelete = this.callbacks.beforeChange(after, before) === true
+          shouldDelete = this.callbacks.beforeChange(after as Option[], before as Option[]) === true;
         }
 
         if (shouldDelete) {
-          // Loop through after and append ids to a variable called selected
-          let selectedIds: string[] = []
+          const selectedIds: string[] = [];
           for (const o of after) {
             if (o instanceof Optgroup) {
-              for (const c of o.options) {
-                selectedIds.push(c.id)
-              }
+              for (const c of o.options) selectedIds.push(c.id);
             }
-
             if (o instanceof Option) {
-              selectedIds.push(o.id)
+              selectedIds.push(o.id);
             }
           }
-          this.callbacks.setSelected(selectedIds, false)
 
-          // Check if we need to close the dropdown
+          this.callbacks.setSelected(selectedIds, false);
+
           if (this.settings.closeOnSelect) {
-            this.callbacks.close()
+            this.callbacks.close();
           }
 
-          // Run afterChange callback
           if (this.callbacks.afterChange) {
-            this.callbacks.afterChange(after)
+            this.callbacks.afterChange(after as Option[]);
           }
 
-          this.updateDeselectAll()
+          this.updateDeselectAll();
+
+          // ⬇️ move focus back to the main container after delete
+          requestAnimationFrame(() => {
+            this.main.main.focus({ preventScroll: true });
+          });
         }
-      }
+      };
 
-      // Add delete svg
-      const deleteSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-      deleteSvg.setAttribute('viewBox', '0 0 100 100')
-      const deletePath = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-      deletePath.setAttribute('d', this.classes.optionDelete)
-      deleteSvg.appendChild(deletePath)
-      deleteDiv.appendChild(deleteSvg)
+      // Keep icon quiet
+      const deleteSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      deleteSvg.setAttribute('viewBox', '0 0 100 100');
+      deleteSvg.setAttribute('aria-hidden', 'true');
+      deleteSvg.setAttribute('focusable', 'false');
+      const deletePath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      deletePath.setAttribute('d', this.classes.optionDelete);
+      deleteSvg.appendChild(deletePath);
+      deleteDiv.appendChild(deleteSvg);
+      value.appendChild(deleteDiv);
 
-      // Add the deleteDiv to the value container
-      value.appendChild(deleteDiv)
-
-      // Add keydown event listener for keyboard navigation (Enter key)
+      // Keyboard on delete button
       deleteDiv.onkeydown = (e) => {
-        if (e.key === 'Enter') {
-          deleteDiv.click()  // Trigger the click event when Enter is pressed
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          deleteDiv!.click();
         }
-      }
+      };
+
+      // Chip-level keyboard remove (Delete/Backspace)
+      value.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          // Pressing Enter/Space on the chip should NOT open the listbox
+          e.preventDefault();
+          e.stopPropagation();
+        } else if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault();
+          e.stopPropagation();
+          deleteDiv?.click();
+        }
+      });
+
+      // When chip receives focus, announce hint and expose delete button to SR/tab order
+      value.addEventListener('focusin', () => {
+        value.setAttribute('aria-describedby', hintId);
+        deleteDiv!.removeAttribute('aria-hidden');
+        deleteDiv!.tabIndex = 0;
+      });
+
+      // When chip loses focus, hide hint and remove delete from SR/tab order
+      value.addEventListener('focusout', () => {
+        value.removeAttribute('aria-describedby');
+        deleteDiv!.setAttribute('aria-hidden', 'true');
+        deleteDiv!.tabIndex = -1;
+      });
     }
 
-    return value
+    return value;
   }
+
 
   public contentDiv(): Content {
     const main = document.createElement('div')
@@ -692,10 +865,16 @@ export default class Render {
       input.readOnly = true
     }
 
-    input.type = 'search'
+    input.type = 'text'
     input.placeholder = this.settings.searchPlaceholder
     input.tabIndex = -1
-    input.setAttribute('aria-label', this.settings.searchPlaceholder)
+    if (this.settings.searchLabelledBy && this.settings.searchLabelledBy.trim()) {
+      input.setAttribute('aria-labelledby', this.settings.searchLabelledBy);
+    } else if (this.settings.searchAriaLabel && this.settings.searchAriaLabel.trim()) {
+      input.setAttribute('aria-label', this.settings.searchAriaLabel);
+    } else {
+      input.setAttribute('aria-label', 'Search options'); // sensible default
+    }
     input.setAttribute('autocapitalize', 'off')
     input.setAttribute('autocomplete', 'off')
     input.setAttribute('autocorrect', 'off')
@@ -755,6 +934,8 @@ export default class Render {
       // Add svg icon
       const plus = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
       plus.setAttribute('viewBox', '0 0 100 100')
+      plus.setAttribute('aria-hidden', 'true')
+      plus.setAttribute('focusable', 'false')
       const plusPath = document.createElementNS('http://www.w3.org/2000/svg', 'path')
       plusPath.setAttribute('d', this.classes.addablePath)
       plus.appendChild(plusPath)
@@ -890,6 +1071,8 @@ export default class Render {
       // Check if option doesnt already have highlighted class
       if (!options[0].classList.contains(this.classes.highlighted)) {
         options[0].classList.add(this.classes.highlighted)
+        const id = options[0].id
+        this.setActiveDescendant(id)
         return
       }
     }
@@ -907,6 +1090,7 @@ export default class Render {
       for (const o of options) {
         if (o.classList.contains(this.classes.selected)) {
           o.classList.add(this.classes.highlighted)
+          this.setActiveDescendant(o.id)
           break
         }
       }
@@ -919,23 +1103,15 @@ export default class Render {
         const prevOption = options[i]
         // Remove highlighted class from current one
         prevOption.classList.remove(this.classes.highlighted)
-
-        // If previous option has parent classes ss-optgroup with ss-open then click it
-        const prevParent = prevOption.parentElement
-        if (prevParent && prevParent.classList.contains(this.classes.open)) {
-          const optgroupLabel = prevParent.querySelector('.' + this.classes.optgroupLabel) as HTMLDivElement
-          if (optgroupLabel) {
-            optgroupLabel.click()
-          }
-        }
-
         // Highlight the next one
-        let selectOption =
+        const selectOption =
           options[dir === 'down' ? (i + 1 < options.length ? i + 1 : 0) : i - 1 >= 0 ? i - 1 : options.length - 1]
+
         selectOption.classList.add(this.classes.highlighted)
+        this.setActiveDescendant(selectOption.id)
         this.ensureElementInView(this.content.list, selectOption)
 
-        // If selected option has parent classes ss-optgroup with ss-close then click it
+        // If selected option has parent classes ss-optgroup with ss-close then open it
         const selectParent = selectOption.parentElement
         if (selectParent && selectParent.classList.contains(this.classes.close)) {
           const optgroupLabel = selectParent.querySelector('.' + this.classes.optgroupLabel) as HTMLDivElement
@@ -950,10 +1126,10 @@ export default class Render {
 
     // If we get here, there is no highlighted option
     // So we will highlight the first or last based upon direction
-    options[dir === 'down' ? 0 : options.length - 1].classList.add(this.classes.highlighted)
-
-    // Scroll to highlighted one
-    this.ensureElementInView(this.content.list, options[dir === 'down' ? 0 : options.length - 1])
+    const newly = options[dir === 'down' ? 0 : options.length - 1]
+    newly.classList.add(this.classes.highlighted)
+    this.setActiveDescendant(newly.id)
+    this.ensureElementInView(this.content.list, newly)
   }
 
   // Create main container that options will reside
@@ -967,40 +1143,46 @@ export default class Render {
   public renderError(error: string) {
     // Clear out innerHtml
     this.content.list.innerHTML = ''
+    this.content.list.removeAttribute('aria-busy')
 
     const errorDiv = document.createElement('div')
     errorDiv.classList.add(this.classes.error)
     errorDiv.textContent = error
     this.content.list.appendChild(errorDiv)
+    this._announceAssertive(error);
   }
 
   public renderSearching() {
     // Clear out innerHtml
     this.content.list.innerHTML = ''
+    this.content.list.setAttribute('aria-busy', 'true')
 
     const searchingDiv = document.createElement('div')
     searchingDiv.classList.add(this.classes.searching)
     searchingDiv.textContent = this.settings.searchingText
     this.content.list.appendChild(searchingDiv)
+    this._announcePolite(this.settings.searchingText);
   }
 
   // Take in data and add options to
   public renderOptions(data: DataArray): void {
     // Clear out innerHtml
     this.content.list.innerHTML = ''
+    this.content.list.removeAttribute('aria-busy')
 
     // If no results show no results text
     if (data.length === 0) {
       const noResults = document.createElement('div')
       noResults.classList.add(this.classes.search)
+      const msg = this.callbacks.addable
+        ? this.settings.addableText.replace('{value}', this.content.search.input.value)
+        : this.settings.searchText
 
-      //
-      if (this.callbacks.addable) {
-        noResults.innerHTML = this.settings.addableText.replace('{value}', this.content.search.input.value)
-      } else {
-        noResults.innerHTML = this.settings.searchText
-      }
+      this._announcePolite(msg)
+      noResults.innerHTML = msg
       this.content.list.appendChild(noResults)
+
+      this.content.list.setAttribute('aria-setsize', '0')
       return
     }
 
@@ -1023,12 +1205,34 @@ export default class Render {
 
     // Append individual options to div container
     const fragment = document.createDocumentFragment()
+    let count = 0; // counts only visible, enabled, non-placeholder items
+
+    const totalOptions = data.filter((d) =>
+      d instanceof Option &&
+      !d.placeholder &&
+      d.display &&
+      !d.disabled
+    ).length;
+
+    const tagPos = (el: HTMLDivElement) => {
+      if (
+        !el.classList.contains(this.classes.placeholder) &&
+        !el.classList.contains(this.classes.disabled) &&
+        !el.classList.contains(this.classes.hide)
+      ) {
+        el.setAttribute('aria-posinset', String(++count));
+        el.setAttribute('aria-setsize', String(totalOptions));
+      }
+    }
+
     for (const d of data) {
       // Create optgroup
       if (d instanceof Optgroup) {
         // Create optgroup
         const optgroupEl = document.createElement('div')
         optgroupEl.classList.add(this.classes.optgroup)
+        optgroupEl.setAttribute('role', 'group')
+        optgroupEl.setAttribute('aria-label', d.label)
 
         // Create label
         const optgroupLabel = document.createElement('div')
@@ -1074,6 +1278,8 @@ export default class Render {
           // Create new svg for checkbox
           const selectAllSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
           selectAllSvg.setAttribute('viewBox', '0 0 100 100')
+          selectAllSvg.setAttribute('aria-hidden', 'true')
+          selectAllSvg.setAttribute('focusable', 'false')
           selectAll.appendChild(selectAllSvg)
 
           // Create new path for box
@@ -1141,6 +1347,8 @@ export default class Render {
           const optgroupClosableSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
           optgroupClosableSvg.setAttribute('viewBox', '0 0 100 100')
           optgroupClosableSvg.classList.add(this.classes.arrow)
+          optgroupClosableSvg.setAttribute('aria-hidden', 'true')
+          optgroupClosableSvg.setAttribute('focusable', 'false')
           optgroupClosable.appendChild(optgroupClosableSvg)
 
           // Create new path for arrow
@@ -1149,7 +1357,7 @@ export default class Render {
 
           // If any options are selected or someone is searching, set optgroup to open
           if (d.options.some((o) => o.selected) || this.content.search.input.value.trim() !== '') {
-            optgroupClosable.classList.add(this.classes.open)
+            optgroupEl.classList.add(this.classes.open)
             optgroupClosableArrow.setAttribute('d', this.classes.arrowOpen)
           } else if (d.closable === 'open') {
             optgroupEl.classList.add(this.classes.open)
@@ -1185,19 +1393,31 @@ export default class Render {
 
         // Loop through options
         for (const o of d.options) {
-          optgroupEl.appendChild(this.option(o))
-          fragment.appendChild(optgroupEl)
+          const optEl = this.option(o)
+          tagPos(optEl)
+          optgroupEl.appendChild(optEl)
         }
+        fragment.appendChild(optgroupEl)
       }
 
       // Create option
       if (d instanceof Option) {
-        fragment.appendChild(this.option(d as Option))
+        const optEl = this.option(d as Option)
+        tagPos(optEl)
+        fragment.appendChild(optEl)
       }
     }
 
     // Append fragment to list
     this.content.list.appendChild(fragment)
+
+    this.content.list.removeAttribute('aria-busy')
+
+    const visibleCount = this.getOptions(true, true, true).length
+
+    this._announcePolite(
+      `${visibleCount} option${visibleCount === 1 ? '' : 's'} available`
+    )
   }
 
   // Create option div element
@@ -1212,8 +1432,8 @@ export default class Render {
 
     // Create option
     const optionEl = document.createElement('div')
-    // optionEl.dataset.id = option.id // Dataset id for identifying an option
-    optionEl.id = option.id
+    optionEl.dataset.id = option.id // Dataset id for identifying an option
+    optionEl.id = `${this.settings.id}__opt__${option.id}`;
     optionEl.classList.add(this.classes.option)
     optionEl.setAttribute('role', 'option') // WCAG attribute
     if (option.class) {
@@ -1251,6 +1471,7 @@ export default class Render {
     // If allowed to deselect, null onclick and add disabled
     if (option.disabled) {
       optionEl.classList.add(this.classes.disabled)
+      optionEl.setAttribute('aria-disabled', 'true')
     }
 
     // If option is selected and hideSelectedOption is true, hide it
@@ -1262,7 +1483,7 @@ export default class Render {
     if (option.selected) {
       optionEl.classList.add(this.classes.selected)
       optionEl.setAttribute('aria-selected', 'true')
-      this.main.main.setAttribute('aria-activedescendant', optionEl.id)
+      this.setActiveDescendant(optionEl.id)
     } else {
       optionEl.classList.remove(this.classes.selected)
       optionEl.setAttribute('aria-selected', 'false')
@@ -1308,10 +1529,10 @@ export default class Render {
 
           // Handles range selection
           if (!this.settings.closeOnSelect) {
-            if (e.shiftKey && this.lastSelectedOption) {
+            if ((e as MouseEvent).shiftKey && this.lastSelectedOption) {
               const options = this.store.getDataOptions()
-              let lastClickedOptionIndex = options.findIndex((o: Option) => o.id === this.lastSelectedOption!.id)
-              let currentOptionIndex = options.findIndex((o: Option) => o.id === option.id)
+              const lastClickedOptionIndex = options.findIndex((o: Option) => o.id === this.lastSelectedOption!.id)
+              const currentOptionIndex = options.findIndex((o: Option) => o.id === option.id)
               if (lastClickedOptionIndex >= 0 && currentOptionIndex >= 0) {
                 // Select the range from the last clicked option to the current one, or vice versa.
                 const startIndex = Math.min(lastClickedOptionIndex, currentOptionIndex)
@@ -1512,5 +1733,17 @@ export default class Render {
     } else {
       deselectButton.classList.add(hideClass)
     }
+  }
+
+  // Keep the active descendant on the *combobox* so screen readers announce the option on first key press.
+  private setActiveDescendant(id: string) {
+    if (!id) {
+      this.main.main.removeAttribute('aria-activedescendant')
+      this.content.search.input.removeAttribute('aria-activedescendant')
+      return
+    }
+    this.main.main.setAttribute('aria-activedescendant', id)
+    // also mirror onto the input for broader AT compatibility
+    this.content.search.input.setAttribute('aria-activedescendant', id)
   }
 }
