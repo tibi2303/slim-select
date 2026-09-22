@@ -41,6 +41,8 @@ export interface Content {
   main: HTMLDivElement
   search: Search
   status: HTMLDivElement
+  groupActions: HTMLDivElement
+  viewport: HTMLDivElement
   list: HTMLDivElement
 }
 
@@ -65,6 +67,8 @@ export default class Render {
 
   // Timeout tracking for cleanup
   private closeAnimationTimeout: ReturnType<typeof setTimeout> | null = null
+
+  private groupActionsObserver: ResizeObserver | null = null
 
   // Elements
   public main: Main
@@ -139,6 +143,16 @@ export default class Render {
     }
   }
 
+  private setActiveDescendant(option: HTMLElement | null): void {
+    for (const element of [this.main.main, this.content.search.input]) {
+      if (option?.id) {
+        element.setAttribute('aria-activedescendant', option.id)
+      } else {
+        element.removeAttribute('aria-activedescendant')
+      }
+    }
+  }
+
   // Remove disabled classes
   public enable(): void {
     // Remove disabled class
@@ -162,6 +176,10 @@ export default class Render {
   public open(): void {
     this.main.arrow.path.setAttribute('d', this.classes.arrowOpen)
     this.main.main.setAttribute('aria-expanded', 'true')
+    this.content.search.input.setAttribute('aria-expanded', 'true')
+    this.content.groupActions.querySelectorAll('button').forEach((button) => {
+      button.tabIndex = 0
+    })
 
     // Clear any pending close animation timeout to prevent race conditions
     if (this.closeAnimationTimeout) {
@@ -192,13 +210,17 @@ export default class Render {
         '[data-id="' + selectedId + '"]'
       ) as HTMLElement
       if (selectedOption) {
-        this.ensureElementInView(this.content.list, selectedOption)
+        this.ensureElementInView(this.content.viewport, selectedOption)
       }
     }
   }
 
   public close(): void {
     this.main.main.setAttribute('aria-expanded', 'false')
+    this.content.search.input.setAttribute('aria-expanded', 'false')
+    this.content.groupActions.querySelectorAll('button').forEach((button) => {
+      button.tabIndex = -1
+    })
     this.main.arrow.path.setAttribute('d', this.classes.arrowClose)
 
     // Remove open class from content to trigger close animation
@@ -209,7 +231,7 @@ export default class Render {
     this.content.search.input.setAttribute('aria-hidden', 'true')
 
     // Clear active descendant when closed
-    this.main.main.removeAttribute('aria-activedescendant')
+    this.setActiveDescendant(null)
 
     // Remove direction class from main and content after animation is complete
     const animationTiming = this.getAnimationTiming()
@@ -298,8 +320,11 @@ export default class Render {
       this.content.list.setAttribute('aria-multiselectable', 'true')
     }
 
-    // Search input should also control the listbox
+    // Keep combobox semantics on the input that receives focus.
+    this.content.search.input.setAttribute('role', 'combobox')
+    this.content.search.input.setAttribute('aria-haspopup', 'listbox')
     this.content.search.input.setAttribute('aria-controls', listboxId)
+    this.content.search.input.setAttribute('aria-expanded', 'false')
   }
 
   public mainDiv(): Main {
@@ -328,6 +353,16 @@ export default class Render {
           e.key === 'ArrowDown' ? this.highlight('down') : this.highlight('up')
           return false
         case 'Tab':
+          if (!e.shiftKey && this.settings.isOpen) {
+            const action =
+              this.content.groupActions.querySelector<HTMLButtonElement>(
+                'button:not(:disabled)'
+              )
+            if (action) {
+              action.focus()
+              return false
+            }
+          }
           this.callbacks.close()
           return true // Continue doing normal tabbing
         case 'Enter':
@@ -658,6 +693,11 @@ export default class Render {
 
     // Loop through and remove
     for (const n of removeNodes) {
+      if (n.contains(document.activeElement)) {
+        this.main.main.focus({ preventScroll: true })
+      }
+      n.inert = true
+      n.setAttribute('aria-hidden', 'true')
       this.addClasses(n, this.classes.valueOut)
       setTimeout(() => {
         if (this.main.values.hasChildNodes() && this.main.values.contains(n)) {
@@ -714,7 +754,9 @@ export default class Render {
     // Only add deletion if the option is not mandatory
     if (!option.mandatory) {
       // Create delete div element
-      const deleteDiv = document.createElement('div')
+      const deleteDiv = document.createElement('button')
+      deleteDiv.type = 'button'
+      deleteDiv.disabled = this.settings.disabled
       this.addClasses(deleteDiv, this.classes.valueDelete)
       deleteDiv.setAttribute('tabindex', '0') // Make the div focusable for tab navigation
       deleteDiv.setAttribute('role', 'button')
@@ -801,10 +843,12 @@ export default class Render {
 
       value.appendChild(deleteDiv)
 
-      // Add keydown event listener for keyboard navigation (Enter key)
+      // Support both button activation keys.
       deleteDiv.onkeydown = (e) => {
-        if (e.key === 'Enter') {
-          deleteDiv.click() // Trigger the click event when Enter is pressed
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          e.stopPropagation()
+          deleteDiv.click()
         }
       }
     }
@@ -831,15 +875,68 @@ export default class Render {
     status.setAttribute('role', 'status')
     main.appendChild(status)
 
+    // Group controls are outside the listbox, whose children are options/groups.
+    const groupActions = document.createElement('div')
+    groupActions.className = 'ss-group-actions'
+    const viewport = document.createElement('div')
+    viewport.className = 'ss-options'
+    const optionsBody = document.createElement('div')
+    optionsBody.className = 'ss-options-body'
+    viewport.appendChild(optionsBody)
+    main.appendChild(viewport)
+    optionsBody.appendChild(groupActions)
+    groupActions.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        this.callbacks.close()
+      } else if (event.key === 'Tab') {
+        const buttons = Array.from(
+          groupActions.querySelectorAll('button:not(:disabled)')
+        )
+        const index = buttons.indexOf(event.target as HTMLButtonElement)
+        if (event.shiftKey && index === 0) {
+          event.preventDefault()
+          const target = this.settings.showSearch
+            ? this.content.search.input
+            : this.main.main
+          target.focus()
+        } else if (!event.shiftKey && index === buttons.length - 1) {
+          this.callbacks.close()
+        }
+      }
+    })
+
     // Add list
     const list = this.listDiv()
-    main.appendChild(list)
+    optionsBody.appendChild(list)
+    if (typeof ResizeObserver !== 'undefined') {
+      this.groupActionsObserver = new ResizeObserver(() =>
+        this.positionGroupActions()
+      )
+      this.groupActionsObserver.observe(optionsBody)
+    }
 
     return {
       main: main,
       search: search,
       status: status,
+      groupActions: groupActions,
+      viewport: viewport,
       list: list
+    }
+  }
+
+  private positionGroupActions(): void {
+    for (const button of this.content.groupActions.querySelectorAll('button')) {
+      const group = document.getElementById(
+        button.getAttribute('aria-controls') || ''
+      )
+      const slot = group?.querySelector<HTMLElement>('.ss-selectall-slot')
+      if (!slot) continue
+      button.style.top = `${slot.offsetTop}px`
+      button.style.left = `${slot.offsetLeft}px`
+      button.style.width = `${slot.offsetWidth}px`
+      button.style.height = `${slot.offsetHeight}px`
     }
   }
 
@@ -852,6 +949,7 @@ export default class Render {
   }
 
   public moveContent(): void {
+    this.positionGroupActions()
     // If contentPosition is relative, dont move the content anywhere other than below
     if (this.settings.contentPosition === 'relative') {
       this.moveContentBelow()
@@ -917,6 +1015,16 @@ export default class Render {
           e.key === 'ArrowDown' ? this.highlight('down') : this.highlight('up')
           return false
         case 'Tab':
+          if (!e.shiftKey && this.settings.isOpen) {
+            const action =
+              this.content.groupActions.querySelector<HTMLButtonElement>(
+                'button:not(:disabled)'
+              )
+            if (action) {
+              action.focus()
+              return false
+            }
+          }
           // When tabbing close the dropdown
           // which will also focus on main div
           // and then continuing normal tabbing
@@ -1112,6 +1220,7 @@ export default class Render {
         !options[0].classList.contains(this.classes.getFirst('highlighted'))
       ) {
         this.addClasses(options[0], this.classes.highlighted)
+        this.setActiveDescendant(options[0])
         return
       }
     }
@@ -1168,12 +1277,10 @@ export default class Render {
                 : options.length - 1
           ]
         this.addClasses(selectOption, this.classes.highlighted)
-        this.ensureElementInView(this.content.list, selectOption)
+        this.ensureElementInView(this.content.viewport, selectOption)
 
         // Update aria-activedescendant for screen readers
-        if (selectOption.id) {
-          this.main.main.setAttribute('aria-activedescendant', selectOption.id)
-        }
+        this.setActiveDescendant(selectOption)
 
         // If selected option has parent classes ss-optgroup with ss-close then click it
         const selectParent = selectOption.parentElement
@@ -1199,12 +1306,10 @@ export default class Render {
     this.addClasses(firstHighlight, this.classes.highlighted)
 
     // Update aria-activedescendant for screen readers
-    if (firstHighlight.id) {
-      this.main.main.setAttribute('aria-activedescendant', firstHighlight.id)
-    }
+    this.setActiveDescendant(firstHighlight)
 
     // Scroll to highlighted one
-    this.ensureElementInView(this.content.list, firstHighlight)
+    this.ensureElementInView(this.content.viewport, firstHighlight)
   }
 
   // Create main container that options will reside
@@ -1223,6 +1328,7 @@ export default class Render {
   public renderError(error: string) {
     // Clear out innerHtml
     this.content.list.innerHTML = ''
+    this.content.groupActions.replaceChildren()
 
     const errorDiv = document.createElement('div')
     this.addClasses(errorDiv, this.classes.error)
@@ -1233,6 +1339,7 @@ export default class Render {
   public renderSearching() {
     // Clear out innerHtml
     this.content.list.innerHTML = ''
+    this.content.groupActions.replaceChildren()
 
     const searchingDiv = document.createElement('div')
     this.addClasses(searchingDiv, this.classes.searching)
@@ -1251,6 +1358,7 @@ export default class Render {
 
     // Clear out innerHtml
     this.content.list.innerHTML = ''
+    this.content.groupActions.replaceChildren()
 
     // If no results show no results text
     if (data.length === 0) {
@@ -1301,6 +1409,8 @@ export default class Render {
         // Create optgroup
         const optgroupEl = document.createElement('div')
         this.addClasses(optgroupEl, this.classes.optgroup)
+        optgroupEl.id = `${this.settings.id}-group-${d.id}`
+        optgroupEl.setAttribute('role', 'group')
 
         // Create label
         const optgroupLabel = document.createElement('div')
@@ -1311,6 +1421,8 @@ export default class Render {
         const optgroupLabelText = document.createElement('div')
         this.addClasses(optgroupLabelText, this.classes.optgroupLabelText)
         optgroupLabelText.textContent = d.label
+        optgroupLabelText.id = `${optgroupEl.id}-label`
+        optgroupEl.setAttribute('aria-labelledby', optgroupLabelText.id)
         optgroupLabel.appendChild(optgroupLabelText)
 
         // Create options container
@@ -1320,18 +1432,28 @@ export default class Render {
 
         // If selectByGroup is true and isMultiple then add click event to label
         if (this.settings.isMultiple && d.selectAll) {
-          // Create new div to hold a checkbox svg
-          const selectAll = document.createElement('div')
+          // Use a native toggle button with a group-specific accessible name.
+          const selectAll = document.createElement('button')
+          selectAll.type = 'button'
+          selectAll.id = `${optgroupEl.id}-select-all`
+          selectAll.tabIndex = this.settings.isOpen ? 0 : -1
+          selectAll.setAttribute('aria-controls', optgroupEl.id)
+          const selectable = d.options
+            .map((option) => new Option(option))
+            .filter(
+              (option) =>
+                !option.disabled &&
+                !option.mandatory &&
+                option.display &&
+                !option.placeholder
+            )
+          selectAll.disabled = this.settings.disabled || selectable.length === 0
           this.addClasses(selectAll, this.classes.optgroupSelectAll)
 
-          // Check options and if all are selected, if so add class selected
-          let allSelected = true
-          for (const o of d.options) {
-            if (!o.selected) {
-              allSelected = false
-              break
-            }
-          }
+          const allSelected =
+            selectable.length > 0 &&
+            selectable.every((option) => option.selected)
+          selectAll.setAttribute('aria-pressed', String(allSelected))
 
           // Add class if all selected
           if (allSelected) {
@@ -1341,78 +1463,58 @@ export default class Render {
           // Add select all text span
           const selectAllText = document.createElement('span')
           selectAllText.textContent = d.selectAllText
+          selectAll.setAttribute('aria-label', `${d.selectAllText}: ${d.label}`)
           selectAll.appendChild(selectAllText)
-
-          // Create new svg for checkbox
-          const selectAllSvg = document.createElementNS(
-            'http://www.w3.org/2000/svg',
-            'svg'
-          )
-          selectAllSvg.setAttribute('viewBox', '0 0 100 100')
-          selectAll.appendChild(selectAllSvg)
-
-          // Create new path for box
-          const selectAllBox = document.createElementNS(
-            'http://www.w3.org/2000/svg',
-            'path'
-          )
-          selectAllBox.setAttribute('d', this.classes.optgroupSelectAllBox)
-          selectAllSvg.appendChild(selectAllBox)
-
-          // Create new path for check
-          const selectAllCheck = document.createElementNS(
-            'http://www.w3.org/2000/svg',
-            'path'
-          )
-          selectAllCheck.setAttribute('d', this.classes.optgroupSelectAllCheck)
-          selectAllSvg.appendChild(selectAllCheck)
 
           // Add click event listener to select all
           selectAll.addEventListener('click', (e: MouseEvent) => {
             e.preventDefault()
             e.stopPropagation()
 
-            // Get the store current selected values
-            const currentSelected = this.store.getSelected()
-
-            // If all selected, remove all options from selected
-            // call setSelected and return
-            if (allSelected) {
-              // Put together new list minus all options in this optgroup
-              const newSelected = currentSelected.filter((s) => {
-                for (const o of d.options) {
-                  if (s === o.id) {
-                    return false
-                  }
-                }
-
-                return true
-              })
-
-              this.callbacks.setSelected(newSelected, true)
+            if (this.settings.disabled) return
+            const current = this.store.getSelectedOptions()
+            const ids = new Set(selectable.map((option) => option.id))
+            const next = allSelected
+              ? current.filter((option) => !ids.has(option.id))
+              : [
+                  ...current,
+                  ...selectable.filter(
+                    (option) =>
+                      !current.some((selected) => selected.id === option.id)
+                  )
+                ]
+            if (
+              next.length < this.settings.minSelected ||
+              (this.settings.maxSelected &&
+                next.length > this.settings.maxSelected)
+            )
               return
-            } else {
-              // Put together new list with all options in this optgroup
-              let optionIds = d.options
-                .map((o) => o.id)
-                .filter((id) => id !== undefined)
-              const newSelected = currentSelected.concat(optionIds)
-
-              // Loop through options and if they don't exist in the store
-              // run addOption callback
-              for (const o of d.options) {
-                if (o.id && !this.store.getOptionByID(o.id)) {
-                  this.callbacks.addOption(new Option(o))
-                }
-              }
-
-              this.callbacks.setSelected(newSelected, true)
+            if (
+              this.callbacks.beforeChange &&
+              this.callbacks.beforeChange(next, current) !== true
+            )
               return
-            }
+            const focused = document.activeElement === selectAll
+            this.callbacks.setSelected(
+              next.map((option) => option.id),
+              true
+            )
+            if (focused) document.getElementById(selectAll.id)?.focus()
           })
 
-          // Append select all to label
-          optgroupActions.appendChild(selectAll)
+          selectAll.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              event.stopPropagation()
+              selectAll.click()
+            }
+          })
+          this.content.groupActions.appendChild(selectAll)
+          const slot = document.createElement('span')
+          slot.className = 'ss-selectall-slot'
+          slot.setAttribute('aria-hidden', 'true')
+          slot.textContent = d.selectAllText
+          optgroupActions.appendChild(slot)
         }
 
         // If optgroup has collapsable
@@ -1491,6 +1593,7 @@ export default class Render {
 
     // Append fragment to list
     this.content.list.appendChild(fragment)
+    this.positionGroupActions()
     this.announce(
       this.settings.resultsText.replace(
         '{count}',
@@ -1564,7 +1667,7 @@ export default class Render {
     if (option.selected) {
       this.addClasses(optionEl, this.classes.selected)
       optionEl.setAttribute('aria-selected', 'true')
-      this.main.main.setAttribute('aria-activedescendant', optionEl.id)
+      this.setActiveDescendant(optionEl)
     } else {
       this.removeClasses(optionEl, this.classes.selected)
       optionEl.setAttribute('aria-selected', 'false')
@@ -1744,6 +1847,7 @@ export default class Render {
   }
 
   public destroy(): void {
+    this.groupActionsObserver?.disconnect()
     // Clear any pending timeouts
     if (this.closeAnimationTimeout) {
       clearTimeout(this.closeAnimationTimeout)
@@ -1933,7 +2037,9 @@ export default class Render {
     element: HTMLElement
   ): void {
     // Determine container top and bottom
-    const cTop = container.scrollTop + container.offsetTop // Make sure to have offsetTop
+    const cTop =
+      container.scrollTop +
+      (container === this.content.viewport ? 0 : container.offsetTop)
     const cBottom = cTop + container.clientHeight
 
     // Determine element top and bottom

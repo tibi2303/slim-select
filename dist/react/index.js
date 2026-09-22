@@ -271,6 +271,7 @@ var f = class {
 	lastSelectedOption;
 	lastRenderedOptions;
 	closeAnimationTimeout = null;
+	groupActionsObserver = null;
 	main;
 	content;
 	classes;
@@ -287,6 +288,9 @@ var f = class {
 		let n = t.split(" ").filter((e) => e.trim() !== "");
 		for (let t of n) e.classList.remove(t.trim());
 	}
+	setActiveDescendant(e) {
+		for (let t of [this.main.main, this.content.search.input]) e?.id ? t.setAttribute("aria-activedescendant", e.id) : t.removeAttribute("aria-activedescendant");
+	}
 	enable() {
 		this.removeClasses(this.main.main, this.classes.disabled), this.main.main.setAttribute("aria-disabled", "false"), this.content.search.input.disabled = !1;
 	}
@@ -294,17 +298,21 @@ var f = class {
 		this.addClasses(this.main.main, this.classes.disabled), this.main.main.setAttribute("aria-disabled", "true"), this.content.search.input.disabled = !0;
 	}
 	open() {
-		this.main.arrow.path.setAttribute("d", this.classes.arrowOpen), this.main.main.setAttribute("aria-expanded", "true"), this.closeAnimationTimeout &&= (clearTimeout(this.closeAnimationTimeout), null);
+		this.main.arrow.path.setAttribute("d", this.classes.arrowOpen), this.main.main.setAttribute("aria-expanded", "true"), this.content.search.input.setAttribute("aria-expanded", "true"), this.content.groupActions.querySelectorAll("button").forEach((e) => {
+			e.tabIndex = 0;
+		}), this.closeAnimationTimeout &&= (clearTimeout(this.closeAnimationTimeout), null);
 		let e = this.settings.openPosition === "up" ? this.classes.dirAbove : this.classes.dirBelow;
 		this.addClasses(this.main.main, e), this.addClasses(this.content.main, e), this.addClasses(this.content.main, this.classes.contentOpen), this.content.search.input.removeAttribute("aria-hidden"), this.moveContent();
 		let t = this.store.getSelectedOptions();
 		if (t.length) {
 			let e = t[t.length - 1].id, n = this.content.list.querySelector("[data-id=\"" + e + "\"]");
-			n && this.ensureElementInView(this.content.list, n);
+			n && this.ensureElementInView(this.content.viewport, n);
 		}
 	}
 	close() {
-		this.main.main.setAttribute("aria-expanded", "false"), this.main.arrow.path.setAttribute("d", this.classes.arrowClose), this.removeClasses(this.content.main, this.classes.contentOpen), this.content.search.input.setAttribute("aria-hidden", "true"), this.main.main.removeAttribute("aria-activedescendant");
+		this.main.main.setAttribute("aria-expanded", "false"), this.content.search.input.setAttribute("aria-expanded", "false"), this.content.groupActions.querySelectorAll("button").forEach((e) => {
+			e.tabIndex = -1;
+		}), this.main.arrow.path.setAttribute("d", this.classes.arrowClose), this.removeClasses(this.content.main, this.classes.contentOpen), this.content.search.input.setAttribute("aria-hidden", "true"), this.setActiveDescendant(null);
 		let e = this.getAnimationTiming();
 		this.closeAnimationTimeout = setTimeout(() => {
 			this.removeClasses(this.main.main, this.classes.dirAbove), this.removeClasses(this.main.main, this.classes.dirBelow), this.removeClasses(this.content.main, this.classes.dirAbove), this.removeClasses(this.content.main, this.classes.dirBelow), this.closeAnimationTimeout = null;
@@ -324,7 +332,7 @@ var f = class {
 	}
 	updateAriaAttributes() {
 		let e = this.content.list.id;
-		this.main.main.role = "combobox", this.main.main.setAttribute("aria-haspopup", "listbox"), this.main.main.setAttribute("aria-controls", e), this.main.main.setAttribute("aria-expanded", "false"), this.content.list.setAttribute("role", "listbox"), this.content.list.setAttribute("aria-label", this.settings.ariaLabel + " listbox"), this.settings.isMultiple && this.content.list.setAttribute("aria-multiselectable", "true"), this.content.search.input.setAttribute("aria-controls", e);
+		this.main.main.role = "combobox", this.main.main.setAttribute("aria-haspopup", "listbox"), this.main.main.setAttribute("aria-controls", e), this.main.main.setAttribute("aria-expanded", "false"), this.content.list.setAttribute("role", "listbox"), this.content.list.setAttribute("aria-label", this.settings.ariaLabel + " listbox"), this.settings.isMultiple && this.content.list.setAttribute("aria-multiselectable", "true"), this.content.search.input.setAttribute("role", "combobox"), this.content.search.input.setAttribute("aria-haspopup", "listbox"), this.content.search.input.setAttribute("aria-controls", e), this.content.search.input.setAttribute("aria-expanded", "false");
 	}
 	mainDiv() {
 		let e = document.createElement("div");
@@ -332,7 +340,12 @@ var f = class {
 			switch (e.key) {
 				case "ArrowUp":
 				case "ArrowDown": return this.callbacks.open(), e.key === "ArrowDown" ? this.highlight("down") : this.highlight("up"), !1;
-				case "Tab": return this.callbacks.close(), !0;
+				case "Tab":
+					if (!e.shiftKey && this.settings.isOpen) {
+						let e = this.content.groupActions.querySelector("button:not(:disabled)");
+						if (e) return e.focus(), !1;
+					}
+					return this.callbacks.close(), !0;
 				case "Enter":
 				case " ":
 					this.callbacks.open();
@@ -439,7 +452,7 @@ var f = class {
 			let i = e[r], a = i.getAttribute("data-id");
 			a && (t.filter((e) => e.id === a, !1).length || n.push(i));
 		}
-		for (let e of n) this.addClasses(e, this.classes.valueOut), setTimeout(() => {
+		for (let e of n) e.contains(document.activeElement) && this.main.main.focus({ preventScroll: !0 }), e.inert = !0, e.setAttribute("aria-hidden", "true"), this.addClasses(e, this.classes.valueOut), setTimeout(() => {
 			this.main.values.hasChildNodes() && this.main.values.contains(e) && this.main.values.removeChild(e);
 		}, 100);
 		e = this.main.values.childNodes;
@@ -454,8 +467,8 @@ var f = class {
 		this.addClasses(t, this.classes.value), t.dataset.id = e.id;
 		let n = document.createElement("div");
 		if (this.addClasses(n, this.classes.valueText), n.textContent = e.text, t.appendChild(n), !e.mandatory) {
-			let n = document.createElement("div");
-			this.addClasses(n, this.classes.valueDelete), n.setAttribute("tabindex", "0"), n.setAttribute("role", "button"), n.setAttribute("aria-label", `${this.settings.removeText} ${e.text}`), n.onclick = (t) => {
+			let n = document.createElement("button");
+			n.type = "button", n.disabled = this.settings.disabled, this.addClasses(n, this.classes.valueDelete), n.setAttribute("tabindex", "0"), n.setAttribute("role", "button"), n.setAttribute("aria-label", `${this.settings.removeText} ${e.text}`), n.onclick = (t) => {
 				if (t.preventDefault(), t.stopPropagation(), this.settings.disabled) return;
 				let n = !0, r = this.store.getSelectedOptions(), i = r.filter((t) => t.selected && t.id !== e.id, !0);
 				if (!(this.settings.minSelected && i.length < this.settings.minSelected) && (this.callbacks.beforeChange && (n = this.callbacks.beforeChange(i, r) === !0), n)) {
@@ -471,7 +484,7 @@ var f = class {
 			r.setAttribute("viewBox", "0 0 100 100");
 			let i = document.createElementNS("http://www.w3.org/2000/svg", "path");
 			i.setAttribute("d", this.classes.optionDelete), r.appendChild(i), n.appendChild(r), t.appendChild(n), n.onkeydown = (e) => {
-				e.key === "Enter" && n.click();
+				(e.key === "Enter" || e.key === " ") && (e.preventDefault(), e.stopPropagation(), n.click());
 			};
 		}
 		return t;
@@ -483,19 +496,39 @@ var f = class {
 		e.appendChild(t.main);
 		let n = document.createElement("div");
 		this.addClasses(n, this.classes.status), n.setAttribute("aria-live", "polite"), n.setAttribute("aria-atomic", "true"), n.setAttribute("role", "status"), e.appendChild(n);
-		let r = this.listDiv();
-		return e.appendChild(r), {
+		let r = document.createElement("div");
+		r.className = "ss-group-actions";
+		let i = document.createElement("div");
+		i.className = "ss-options";
+		let a = document.createElement("div");
+		a.className = "ss-options-body", i.appendChild(a), e.appendChild(i), a.appendChild(r), r.addEventListener("keydown", (e) => {
+			if (e.key === "Escape") e.preventDefault(), this.callbacks.close();
+			else if (e.key === "Tab") {
+				let t = Array.from(r.querySelectorAll("button:not(:disabled)")), n = t.indexOf(e.target);
+				e.shiftKey && n === 0 ? (e.preventDefault(), (this.settings.showSearch ? this.content.search.input : this.main.main).focus()) : !e.shiftKey && n === t.length - 1 && this.callbacks.close();
+			}
+		});
+		let o = this.listDiv();
+		return a.appendChild(o), typeof ResizeObserver < "u" && (this.groupActionsObserver = new ResizeObserver(() => this.positionGroupActions()), this.groupActionsObserver.observe(a)), {
 			main: e,
 			search: t,
 			status: n,
-			list: r
+			groupActions: r,
+			viewport: i,
+			list: o
 		};
+	}
+	positionGroupActions() {
+		for (let e of this.content.groupActions.querySelectorAll("button")) {
+			let t = document.getElementById(e.getAttribute("aria-controls") || "")?.querySelector(".ss-selectall-slot");
+			t && (e.style.top = `${t.offsetTop}px`, e.style.left = `${t.offsetLeft}px`, e.style.width = `${t.offsetWidth}px`, e.style.height = `${t.offsetHeight}px`);
+		}
 	}
 	announce(e) {
 		this.settings.showSearch && (this.content.status.textContent = e);
 	}
 	moveContent() {
-		if (this.settings.contentPosition === "relative") {
+		if (this.positionGroupActions(), this.settings.contentPosition === "relative") {
 			this.moveContentBelow();
 			return;
 		}
@@ -521,7 +554,12 @@ var f = class {
 			switch (e.key) {
 				case "ArrowUp":
 				case "ArrowDown": return e.key === "ArrowDown" ? this.highlight("down") : this.highlight("up"), !1;
-				case "Tab": return this.callbacks.close(), !0;
+				case "Tab":
+					if (!e.shiftKey && this.settings.isOpen) {
+						let e = this.content.groupActions.querySelector("button:not(:disabled)");
+						if (e) return e.focus(), !1;
+					}
+					return this.callbacks.close(), !0;
 				case "Escape": return this.callbacks.close(), !1;
 				case " ":
 					let t = this.content.list.querySelector("." + this.classes.getFirst("highlighted"));
@@ -581,7 +619,7 @@ var f = class {
 		let t = this.getOptions(!0, !0, !0);
 		if (t.length === 0) return;
 		if (t.length === 1 && !t[0].classList.contains(this.classes.getFirst("highlighted"))) {
-			this.addClasses(t[0], this.classes.highlighted);
+			this.addClasses(t[0], this.classes.highlighted), this.setActiveDescendant(t[0]);
 			return;
 		}
 		let n = !1;
@@ -601,7 +639,7 @@ var f = class {
 				e && e.click();
 			}
 			let a = t[e === "down" ? n + 1 < t.length ? n + 1 : 0 : n - 1 >= 0 ? n - 1 : t.length - 1];
-			this.addClasses(a, this.classes.highlighted), this.ensureElementInView(this.content.list, a), a.id && this.main.main.setAttribute("aria-activedescendant", a.id);
+			this.addClasses(a, this.classes.highlighted), this.ensureElementInView(this.content.viewport, a), this.setActiveDescendant(a);
 			let o = a.parentElement;
 			if (o && o.classList.contains(this.classes.getFirst("close"))) {
 				let e = o.querySelector("." + this.classes.getFirst("optgroupLabel"));
@@ -610,7 +648,7 @@ var f = class {
 			return;
 		}
 		let r = t[e === "down" ? 0 : t.length - 1];
-		this.addClasses(r, this.classes.highlighted), r.id && this.main.main.setAttribute("aria-activedescendant", r.id), this.ensureElementInView(this.content.list, r);
+		this.addClasses(r, this.classes.highlighted), this.setActiveDescendant(r), this.ensureElementInView(this.content.viewport, r);
 	}
 	listDiv() {
 		let e = document.createElement("div");
@@ -619,17 +657,17 @@ var f = class {
 		return e.id = t, e.dataset.id = t, e;
 	}
 	renderError(e) {
-		this.content.list.innerHTML = "";
+		this.content.list.innerHTML = "", this.content.groupActions.replaceChildren();
 		let t = document.createElement("div");
 		this.addClasses(t, this.classes.error), t.textContent = e, this.content.list.appendChild(t);
 	}
 	renderSearching() {
-		this.content.list.innerHTML = "";
+		this.content.list.innerHTML = "", this.content.groupActions.replaceChildren();
 		let e = document.createElement("div");
 		this.addClasses(e, this.classes.searching), e.textContent = this.settings.searchingText, this.content.list.appendChild(e), this.announce(this.settings.searchingText);
 	}
 	renderOptions(e) {
-		if (this.lastRenderedOptions = e.map((e) => e instanceof f ? [e] : e.options.map((e) => new f(e))).flat(), this.content.list.innerHTML = "", e.length === 0) {
+		if (this.lastRenderedOptions = e.map((e) => e instanceof f ? [e] : e.options.map((e) => new f(e))).flat(), this.content.list.innerHTML = "", this.content.groupActions.replaceChildren(), e.length === 0) {
 			let e = document.createElement("div");
 			if (this.addClasses(e, this.classes.search), this.callbacks.addable) {
 				let t = this.settings.addableText.replace("{value}", this.content.search.input.value);
@@ -648,45 +686,31 @@ var f = class {
 		for (let n of e) {
 			if (n instanceof p) {
 				let e = document.createElement("div");
-				this.addClasses(e, this.classes.optgroup);
+				this.addClasses(e, this.classes.optgroup), e.id = `${this.settings.id}-group-${n.id}`, e.setAttribute("role", "group");
 				let r = document.createElement("div");
 				this.addClasses(r, this.classes.optgroupLabel), e.appendChild(r);
 				let i = document.createElement("div");
-				this.addClasses(i, this.classes.optgroupLabelText), i.textContent = n.label, r.appendChild(i);
+				this.addClasses(i, this.classes.optgroupLabelText), i.textContent = n.label, i.id = `${e.id}-label`, e.setAttribute("aria-labelledby", i.id), r.appendChild(i);
 				let a = document.createElement("div");
 				if (this.addClasses(a, this.classes.optgroupActions), r.appendChild(a), this.settings.isMultiple && n.selectAll) {
-					let e = document.createElement("div");
-					this.addClasses(e, this.classes.optgroupSelectAll);
-					let t = !0;
-					for (let e of n.options) if (!e.selected) {
-						t = !1;
-						break;
-					}
-					t && this.addClasses(e, this.classes.selected);
-					let r = document.createElement("span");
-					r.textContent = n.selectAllText, e.appendChild(r);
-					let i = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-					i.setAttribute("viewBox", "0 0 100 100"), e.appendChild(i);
-					let o = document.createElementNS("http://www.w3.org/2000/svg", "path");
-					o.setAttribute("d", this.classes.optgroupSelectAllBox), i.appendChild(o);
-					let s = document.createElementNS("http://www.w3.org/2000/svg", "path");
-					s.setAttribute("d", this.classes.optgroupSelectAllCheck), i.appendChild(s), e.addEventListener("click", (e) => {
-						e.preventDefault(), e.stopPropagation();
-						let r = this.store.getSelected();
-						if (t) {
-							let e = r.filter((e) => {
-								for (let t of n.options) if (e === t.id) return !1;
-								return !0;
-							});
-							this.callbacks.setSelected(e, !0);
-							return;
-						} else {
-							let e = n.options.map((e) => e.id).filter((e) => e !== void 0), t = r.concat(e);
-							for (let e of n.options) e.id && !this.store.getOptionByID(e.id) && this.callbacks.addOption(new f(e));
-							this.callbacks.setSelected(t, !0);
-							return;
-						}
-					}), a.appendChild(e);
+					let t = document.createElement("button");
+					t.type = "button", t.id = `${e.id}-select-all`, t.tabIndex = this.settings.isOpen ? 0 : -1, t.setAttribute("aria-controls", e.id);
+					let r = n.options.map((e) => new f(e)).filter((e) => !e.disabled && !e.mandatory && e.display && !e.placeholder);
+					t.disabled = this.settings.disabled || r.length === 0, this.addClasses(t, this.classes.optgroupSelectAll);
+					let i = r.length > 0 && r.every((e) => e.selected);
+					t.setAttribute("aria-pressed", String(i)), i && this.addClasses(t, this.classes.selected);
+					let o = document.createElement("span");
+					o.textContent = n.selectAllText, t.setAttribute("aria-label", `${n.selectAllText}: ${n.label}`), t.appendChild(o), t.addEventListener("click", (e) => {
+						if (e.preventDefault(), e.stopPropagation(), this.settings.disabled) return;
+						let n = this.store.getSelectedOptions(), a = new Set(r.map((e) => e.id)), o = i ? n.filter((e) => !a.has(e.id)) : [...n, ...r.filter((e) => !n.some((t) => t.id === e.id))];
+						if (o.length < this.settings.minSelected || this.settings.maxSelected && o.length > this.settings.maxSelected || this.callbacks.beforeChange && this.callbacks.beforeChange(o, n) !== !0) return;
+						let s = document.activeElement === t;
+						this.callbacks.setSelected(o.map((e) => e.id), !0), s && document.getElementById(t.id)?.focus();
+					}), t.addEventListener("keydown", (e) => {
+						(e.key === "Enter" || e.key === " ") && (e.preventDefault(), e.stopPropagation(), t.click());
+					}), this.content.groupActions.appendChild(t);
+					let s = document.createElement("span");
+					s.className = "ss-selectall-slot", s.setAttribute("aria-hidden", "true"), s.textContent = n.selectAllText, a.appendChild(s);
 				}
 				if (n.closable !== "off") {
 					let t = document.createElement("div");
@@ -703,7 +727,7 @@ var f = class {
 			}
 			n instanceof f && t.appendChild(this.option(n));
 		}
-		this.content.list.appendChild(t), this.announce(this.settings.resultsText.replace("{count}", String(this.lastRenderedOptions.length)));
+		this.content.list.appendChild(t), this.positionGroupActions(), this.announce(this.settings.resultsText.replace("{count}", String(this.lastRenderedOptions.length)));
 	}
 	option(e) {
 		if (e.placeholder) {
@@ -713,7 +737,7 @@ var f = class {
 		let t = document.createElement("div");
 		return t.dataset.id = e.id, t.id = this.settings.id + "-" + e.id, this.addClasses(t, this.classes.option), t.setAttribute("role", "option"), e.class && e.class.split(" ").forEach((e) => {
 			t.classList.add(e);
-		}), e.style && (t.style.cssText = e.style), this.settings.searchHighlight && this.content.search.input.value.trim() !== "" ? t.innerHTML = this.highlightText(e.html === "" ? e.text : e.html, this.content.search.input.value, this.classes.searchHighlighter) : e.html === "" ? t.textContent = e.text : t.innerHTML = e.html, this.settings.showOptionTooltips && t.textContent && t.setAttribute("title", t.textContent), e.display || this.addClasses(t, this.classes.hide), e.disabled && this.addClasses(t, this.classes.disabled), e.selected && this.settings.hideSelected && this.addClasses(t, this.classes.hide), e.selected ? (this.addClasses(t, this.classes.selected), t.setAttribute("aria-selected", "true"), this.main.main.setAttribute("aria-activedescendant", t.id)) : (this.removeClasses(t, this.classes.selected), t.setAttribute("aria-selected", "false")), t.addEventListener("click", (t) => {
+		}), e.style && (t.style.cssText = e.style), this.settings.searchHighlight && this.content.search.input.value.trim() !== "" ? t.innerHTML = this.highlightText(e.html === "" ? e.text : e.html, this.content.search.input.value, this.classes.searchHighlighter) : e.html === "" ? t.textContent = e.text : t.innerHTML = e.html, this.settings.showOptionTooltips && t.textContent && t.setAttribute("title", t.textContent), e.display || this.addClasses(t, this.classes.hide), e.disabled && this.addClasses(t, this.classes.disabled), e.selected && this.settings.hideSelected && this.addClasses(t, this.classes.hide), e.selected ? (this.addClasses(t, this.classes.selected), t.setAttribute("aria-selected", "true"), this.setActiveDescendant(t)) : (this.removeClasses(t, this.classes.selected), t.setAttribute("aria-selected", "false")), t.addEventListener("click", (t) => {
 			t.preventDefault(), t.stopPropagation();
 			let n = this.store.getSelected(), r = t.currentTarget, i = String(r.dataset.id), a = t.ctrlKey || t.metaKey;
 			if (e.disabled || !this.settings.isMultiple && e.selected && !this.settings.allowDeselect || e.selected && e.mandatory || this.settings.isMultiple && this.settings.maxSelected <= n.length && !e.selected || this.settings.isMultiple && this.settings.minSelected >= n.length && e.selected && !a) return;
@@ -736,7 +760,7 @@ var f = class {
 		}), t;
 	}
 	destroy() {
-		this.closeAnimationTimeout &&= (clearTimeout(this.closeAnimationTimeout), null), this.main.main.remove(), this.content.main.remove();
+		this.groupActionsObserver?.disconnect(), this.closeAnimationTimeout &&= (clearTimeout(this.closeAnimationTimeout), null), this.main.main.remove(), this.content.main.remove();
 	}
 	highlightText(e, t, n) {
 		let r = t.trim();
@@ -795,7 +819,7 @@ var f = class {
 		this.setContentDirection("below"), this.setContentPosition();
 	}
 	ensureElementInView(e, t) {
-		let n = e.scrollTop + e.offsetTop, r = n + e.clientHeight, i = t.offsetTop, a = i + t.clientHeight;
+		let n = e.scrollTop + (e === this.content.viewport ? 0 : e.offsetTop), r = n + e.clientHeight, i = t.offsetTop, a = i + t.clientHeight;
 		i < n ? e.scrollTop -= n - i : a > r && (e.scrollTop += a - r);
 	}
 	putContent() {
@@ -821,6 +845,7 @@ var f = class {
 	preventNativeSelect = null;
 	preventNativeSelectMousedown = null;
 	preventNativeSelectFocus = null;
+	restoreAriaHiddenOnBlur = null;
 	constructor(e) {
 		this.select = e, this.valueChange = this.valueChange.bind(this), this.select.addEventListener("change", this.valueChange, { passive: !0 }), this.observer = new MutationObserver(this.observeCall.bind(this)), this.changeListen(!0);
 	}
@@ -831,12 +856,14 @@ var f = class {
 		this.select.disabled = !0;
 	}
 	hideUI() {
-		this.select.tabIndex = -1, this.select.style.position = "absolute", this.select.style.width = "1px", this.select.style.height = "1px", this.select.style.opacity = "0", this.select.style.overflow = "hidden", this.select.style.pointerEvents = "none", this.select.style.margin = "0", this.select.style.padding = "0", this.select.style.borderWidth = "0", this.select.style.clip = "rect(0 0 0 0)", this.select.setAttribute("aria-hidden", "true"), this.preventNativeSelect || (this.preventNativeSelect = (e) => {
+		this.select.tabIndex = -1, this.select.style.position = "absolute", this.select.style.width = "1px", this.select.style.height = "1px", this.select.style.opacity = "0", this.select.style.overflow = "hidden", this.select.style.pointerEvents = "none", this.select.style.margin = "0", this.select.style.padding = "0", this.select.style.borderWidth = "0", this.select.style.clipPath = "inset(50%)", document.activeElement !== this.select && this.select.setAttribute("aria-hidden", "true"), this.preventNativeSelect || (this.preventNativeSelect = (e) => {
 			e.preventDefault(), e.stopPropagation(), e.stopImmediatePropagation();
 		}, this.preventNativeSelectMousedown = (e) => {
 			e.preventDefault(), e.stopPropagation(), e.stopImmediatePropagation();
 		}, this.preventNativeSelectFocus = (e) => {
-			e.preventDefault(), e.stopPropagation(), e.stopImmediatePropagation();
+			this.select.removeAttribute("aria-hidden"), e.preventDefault(), e.stopPropagation(), e.stopImmediatePropagation();
+		}, this.restoreAriaHiddenOnBlur = () => {
+			this.select.setAttribute("aria-hidden", "true");
 		}, this.select.addEventListener("click", this.preventNativeSelect, {
 			capture: !0,
 			passive: !1
@@ -846,10 +873,13 @@ var f = class {
 		}), this.select.addEventListener("focus", this.preventNativeSelectFocus, {
 			capture: !0,
 			passive: !1
+		}), this.select.addEventListener("blur", this.restoreAriaHiddenOnBlur, {
+			capture: !0,
+			passive: !0
 		}));
 	}
 	showUI() {
-		this.select.removeAttribute("tabindex"), this.select.style.position = "", this.select.style.width = "", this.select.style.height = "", this.select.style.opacity = "", this.select.style.overflow = "", this.select.style.pointerEvents = "", this.select.style.margin = "", this.select.style.padding = "", this.select.style.borderWidth = "", this.select.style.clip = "", this.select.removeAttribute("aria-hidden"), this.preventNativeSelect &&= (this.select.removeEventListener("click", this.preventNativeSelect, { capture: !0 }), null), this.preventNativeSelectMousedown &&= (this.select.removeEventListener("mousedown", this.preventNativeSelectMousedown, { capture: !0 }), null), this.preventNativeSelectFocus &&= (this.select.removeEventListener("focus", this.preventNativeSelectFocus, { capture: !0 }), null);
+		this.select.removeAttribute("tabindex"), this.select.style.position = "", this.select.style.width = "", this.select.style.height = "", this.select.style.opacity = "", this.select.style.overflow = "", this.select.style.pointerEvents = "", this.select.style.margin = "", this.select.style.padding = "", this.select.style.borderWidth = "", this.select.style.clipPath = "", this.select.removeAttribute("aria-hidden"), this.preventNativeSelect &&= (this.select.removeEventListener("click", this.preventNativeSelect, { capture: !0 }), null), this.preventNativeSelectMousedown &&= (this.select.removeEventListener("mousedown", this.preventNativeSelectMousedown, { capture: !0 }), null), this.preventNativeSelectFocus &&= (this.select.removeEventListener("focus", this.preventNativeSelectFocus, { capture: !0 }), null), this.restoreAriaHiddenOnBlur &&= (this.select.removeEventListener("blur", this.restoreAriaHiddenOnBlur, { capture: !0 }), null);
 	}
 	changeListen(e) {
 		this.listen = e, e && this.observer && this.observer.observe(this.select, {
@@ -1045,7 +1075,7 @@ var f = class {
 		});
 	}
 	destroy() {
-		this.changeListen(!1), this.select.removeEventListener("change", this.valueChange), this.preventNativeSelect &&= (this.select.removeEventListener("click", this.preventNativeSelect, { capture: !0 }), null), this.preventNativeSelectMousedown &&= (this.select.removeEventListener("mousedown", this.preventNativeSelectMousedown, { capture: !0 }), null), this.preventNativeSelectFocus &&= (this.select.removeEventListener("focus", this.preventNativeSelectFocus, { capture: !0 }), null), this.observer &&= (this.observer.disconnect(), null), this.removeLabelHandlers(), delete this.select.dataset.id, this.showUI();
+		this.changeListen(!1), this.select.removeEventListener("change", this.valueChange), this.preventNativeSelect &&= (this.select.removeEventListener("click", this.preventNativeSelect, { capture: !0 }), null), this.preventNativeSelectMousedown &&= (this.select.removeEventListener("mousedown", this.preventNativeSelectMousedown, { capture: !0 }), null), this.preventNativeSelectFocus &&= (this.select.removeEventListener("focus", this.preventNativeSelectFocus, { capture: !0 }), null), this.restoreAriaHiddenOnBlur &&= (this.select.removeEventListener("blur", this.restoreAriaHiddenOnBlur, { capture: !0 }), null), this.observer &&= (this.observer.disconnect(), null), this.removeLabelHandlers(), delete this.select.dataset.id, this.showUI();
 	}
 }, _ = class {
 	id = "";
@@ -1149,14 +1179,19 @@ var f = class {
 			afterChange: this.events.afterChange
 		};
 		this.render = new h(this.settings, this.cssClasses, this.store, r), this.render.renderValues(), this.render.renderOptions(this.store.getData());
-		let i = this.selectEl.getAttribute("aria-label"), a = this.selectEl.getAttribute("aria-labelledby");
-		if (i) this.render.main.main.setAttribute("aria-label", i);
-		else if (a) this.render.main.main.removeAttribute("aria-label"), this.render.main.main.setAttribute("aria-labelledby", a);
+		let i = this.selectEl.getAttribute("aria-label"), a = this.selectEl.getAttribute("aria-labelledby"), s = [
+			this.render.main.main,
+			this.render.content.search.input,
+			this.render.content.list
+		];
+		if (i) for (let e of s) e.removeAttribute("aria-labelledby"), e.setAttribute("aria-label", i);
+		else if (a) for (let e of s) e.removeAttribute("aria-label"), e.setAttribute("aria-labelledby", a);
 		else if (this.selectEl.labels && this.selectEl.labels.length > 0) {
 			let e = Array.from(this.selectEl.labels).map((e, t) => (e.id ||= `${this.settings.id}-label-${t}`, e.id));
-			this.render.main.main.removeAttribute("aria-label"), this.render.main.main.setAttribute("aria-labelledby", e.join(" "));
+			for (let t of s) t.removeAttribute("aria-label"), t.setAttribute("aria-labelledby", e.join(" "));
 		}
-		this.selectEl.parentNode && this.selectEl.parentNode.insertBefore(this.render.main.main, this.selectEl.nextSibling), window.addEventListener("resize", this.windowResize, !1), this.settings.openPosition === "auto" && window.addEventListener("scroll", this.windowScroll, !1), document.addEventListener("visibilitychange", this.windowVisibilityChange), this.settings.disabled && this.disable(), this.settings.alwaysOpen && this.open(), this.select.setupLabelHandlers(), this.selectEl.slim = this;
+		let c = this.selectEl.getAttribute("aria-describedby");
+		c && (this.render.main.main.setAttribute("aria-describedby", c), this.render.content.search.input.setAttribute("aria-describedby", c)), this.selectEl.parentNode && this.selectEl.parentNode.insertBefore(this.render.main.main, this.selectEl.nextSibling), window.addEventListener("resize", this.windowResize, !1), this.settings.openPosition === "auto" && window.addEventListener("scroll", this.windowScroll, !1), document.addEventListener("visibilitychange", this.windowVisibilityChange), this.settings.disabled && this.disable(), this.settings.alwaysOpen && this.open(), this.select.setupLabelHandlers(), this.selectEl.slim = this;
 	}
 	enable() {
 		this.settings.disabled = !1, this.select.enable(), this.render.enable();

@@ -209,6 +209,20 @@
       }
 
       .ss-value-delete {
+        appearance: none;
+        background: transparent;
+        border: 0;
+        border-radius: 0;
+        color: inherit;
+        font: inherit;
+        margin: 0;
+        justify-content: center;
+        min-width: 24px;
+        min-height: 24px;
+        &:focus {
+          outline: 2px solid var(--ss-bg-color);
+          outline-offset: -2px;
+        }
         display: flex;
         align-items: center;
         height: var(--ss-spacing-l);
@@ -480,55 +494,6 @@
           justify-content: center;
           gap: var(--ss-spacing-m);
 
-          .ss-selectall {
-            flex: 0 0 auto;
-            display: flex;
-            flex-direction: row;
-            cursor: pointer;
-
-            &:hover {
-              opacity: 0.5;
-            }
-
-            &.ss-selected {
-              svg {
-                path {
-                  stroke: var(--ss-error-color);
-                }
-              }
-            }
-
-            span {
-              flex: 0 1 auto;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-size: calc(100% * 0.6);
-              text-align: center;
-              padding: 0 var(--ss-spacing-s) 0 0;
-            }
-
-            svg {
-              flex: 0 1 auto;
-              width: 13px;
-              height: 13px;
-
-              path {
-                fill: none;
-                stroke: var(--ss-success-color);
-                stroke-linecap: round;
-                stroke-linejoin: round;
-              }
-
-              &:first-child {
-                stroke-width: 5;
-              }
-              &:last-child {
-                stroke-width: 11;
-              }
-            }
-          }
-
           .ss-closable {
             flex: 0 1 auto;
             display: flex;
@@ -606,6 +571,74 @@
       align-items: center;
       padding: var(--ss-spacing-m) var(--ss-spacing-l) var(--ss-spacing-m)
         var(--ss-spacing-l);
+    }
+  }
+}
+
+.ss-content {
+  .ss-selectall,
+  .ss-selectall-slot {
+    display: inline-flex;
+    white-space: nowrap;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0 0.25rem;
+    border: 0;
+    border-radius: 2px;
+    background: transparent;
+    color: var(--ss-font-color);
+    font: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
+
+    &:hover,
+    &[aria-pressed='true'] {
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    &:focus {
+      outline: 2px solid currentColor;
+      outline-offset: 1px;
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.5;
+    }
+
+    @media (pointer: coarse) {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+}
+
+.ss-content {
+  .ss-options {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .ss-options-body {
+    position: relative;
+  }
+
+  .ss-options .ss-list {
+    overflow: visible;
+  }
+
+  .ss-selectall-slot {
+    visibility: hidden;
+  }
+
+  .ss-group-actions {
+    .ss-selectall {
+      position: absolute;
+      z-index: 1;
     }
   }
 }

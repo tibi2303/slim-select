@@ -28,6 +28,8 @@ export interface Content {
     main: HTMLDivElement;
     search: Search;
     status: HTMLDivElement;
+    groupActions: HTMLDivElement;
+    viewport: HTMLDivElement;
     list: HTMLDivElement;
 }
 export interface Search {
@@ -46,12 +48,14 @@ export default class Render {
     private lastSelectedOption;
     private lastRenderedOptions;
     private closeAnimationTimeout;
+    private groupActionsObserver;
     main: Main;
     content: Content;
     classes: CssClasses;
     constructor(settings: Required<Settings>, classes: Required<CssClasses>, store: Store, callbacks: Callbacks);
     private addClasses;
     private removeClasses;
+    private setActiveDescendant;
     enable(): void;
     disable(): void;
     open(): void;
@@ -67,6 +71,7 @@ export default class Render {
     private renderMultipleValues;
     multipleValue(option: Option): HTMLDivElement;
     contentDiv(): Content;
+    private positionGroupActions;
     private announce;
     moveContent(): void;
     searchDiv(): Search;
