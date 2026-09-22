@@ -283,6 +283,9 @@ var o = class {
 		let n = t.split(" ").filter((e) => e.trim() !== "");
 		for (let t of n) e.classList.remove(t.trim());
 	}
+	setActiveDescendant(e) {
+		for (let t of [this.main.main, this.content.search.input]) e?.id ? t.setAttribute("aria-activedescendant", e.id) : t.removeAttribute("aria-activedescendant");
+	}
 	enable() {
 		this.removeClasses(this.main.main, this.classes.disabled), this.main.main.setAttribute("aria-disabled", "false"), this.content.search.input.disabled = !1;
 	}
@@ -290,7 +293,7 @@ var o = class {
 		this.addClasses(this.main.main, this.classes.disabled), this.main.main.setAttribute("aria-disabled", "true"), this.content.search.input.disabled = !0;
 	}
 	open() {
-		this.main.arrow.path.setAttribute("d", this.classes.arrowOpen), this.main.main.setAttribute("aria-expanded", "true"), this.closeAnimationTimeout &&= (clearTimeout(this.closeAnimationTimeout), null);
+		this.main.arrow.path.setAttribute("d", this.classes.arrowOpen), this.main.main.setAttribute("aria-expanded", "true"), this.content.search.input.setAttribute("aria-expanded", "true"), this.closeAnimationTimeout &&= (clearTimeout(this.closeAnimationTimeout), null);
 		let e = this.settings.openPosition === "up" ? this.classes.dirAbove : this.classes.dirBelow;
 		this.addClasses(this.main.main, e), this.addClasses(this.content.main, e), this.addClasses(this.content.main, this.classes.contentOpen), this.content.search.input.removeAttribute("aria-hidden"), this.moveContent();
 		let t = this.store.getSelectedOptions();
@@ -300,7 +303,7 @@ var o = class {
 		}
 	}
 	close() {
-		this.main.main.setAttribute("aria-expanded", "false"), this.main.arrow.path.setAttribute("d", this.classes.arrowClose), this.removeClasses(this.content.main, this.classes.contentOpen), this.content.search.input.setAttribute("aria-hidden", "true"), this.main.main.removeAttribute("aria-activedescendant");
+		this.main.main.setAttribute("aria-expanded", "false"), this.content.search.input.setAttribute("aria-expanded", "false"), this.main.arrow.path.setAttribute("d", this.classes.arrowClose), this.removeClasses(this.content.main, this.classes.contentOpen), this.content.search.input.setAttribute("aria-hidden", "true"), this.setActiveDescendant(null);
 		let e = this.getAnimationTiming();
 		this.closeAnimationTimeout = setTimeout(() => {
 			this.removeClasses(this.main.main, this.classes.dirAbove), this.removeClasses(this.main.main, this.classes.dirBelow), this.removeClasses(this.content.main, this.classes.dirAbove), this.removeClasses(this.content.main, this.classes.dirBelow), this.closeAnimationTimeout = null;
@@ -320,7 +323,7 @@ var o = class {
 	}
 	updateAriaAttributes() {
 		let e = this.content.list.id;
-		this.main.main.role = "combobox", this.main.main.setAttribute("aria-haspopup", "listbox"), this.main.main.setAttribute("aria-controls", e), this.main.main.setAttribute("aria-expanded", "false"), this.content.list.setAttribute("role", "listbox"), this.content.list.setAttribute("aria-label", this.settings.ariaLabel + " listbox"), this.settings.isMultiple && this.content.list.setAttribute("aria-multiselectable", "true"), this.content.search.input.setAttribute("aria-controls", e);
+		this.main.main.role = "combobox", this.main.main.setAttribute("aria-haspopup", "listbox"), this.main.main.setAttribute("aria-controls", e), this.main.main.setAttribute("aria-expanded", "false"), this.content.list.setAttribute("role", "listbox"), this.content.list.setAttribute("aria-label", this.settings.ariaLabel + " listbox"), this.settings.isMultiple && this.content.list.setAttribute("aria-multiselectable", "true"), this.content.search.input.setAttribute("role", "combobox"), this.content.search.input.setAttribute("aria-haspopup", "listbox"), this.content.search.input.setAttribute("aria-controls", e), this.content.search.input.setAttribute("aria-expanded", "false");
 	}
 	mainDiv() {
 		let e = document.createElement("div");
@@ -467,7 +470,7 @@ var o = class {
 			r.setAttribute("viewBox", "0 0 100 100");
 			let i = document.createElementNS("http://www.w3.org/2000/svg", "path");
 			i.setAttribute("d", this.classes.optionDelete), r.appendChild(i), n.appendChild(r), t.appendChild(n), n.onkeydown = (e) => {
-				e.key === "Enter" && n.click();
+				(e.key === "Enter" || e.key === " ") && (e.preventDefault(), n.click());
 			};
 		}
 		return t;
@@ -577,7 +580,7 @@ var o = class {
 		let t = this.getOptions(!0, !0, !0);
 		if (t.length === 0) return;
 		if (t.length === 1 && !t[0].classList.contains(this.classes.getFirst("highlighted"))) {
-			this.addClasses(t[0], this.classes.highlighted);
+			this.addClasses(t[0], this.classes.highlighted), this.setActiveDescendant(t[0]);
 			return;
 		}
 		let n = !1;
@@ -597,7 +600,7 @@ var o = class {
 				e && e.click();
 			}
 			let a = t[e === "down" ? n + 1 < t.length ? n + 1 : 0 : n - 1 >= 0 ? n - 1 : t.length - 1];
-			this.addClasses(a, this.classes.highlighted), this.ensureElementInView(this.content.list, a), a.id && this.main.main.setAttribute("aria-activedescendant", a.id);
+			this.addClasses(a, this.classes.highlighted), this.ensureElementInView(this.content.list, a), this.setActiveDescendant(a);
 			let o = a.parentElement;
 			if (o && o.classList.contains(this.classes.getFirst("close"))) {
 				let e = o.querySelector("." + this.classes.getFirst("optgroupLabel"));
@@ -606,7 +609,7 @@ var o = class {
 			return;
 		}
 		let r = t[e === "down" ? 0 : t.length - 1];
-		this.addClasses(r, this.classes.highlighted), r.id && this.main.main.setAttribute("aria-activedescendant", r.id), this.ensureElementInView(this.content.list, r);
+		this.addClasses(r, this.classes.highlighted), this.setActiveDescendant(r), this.ensureElementInView(this.content.list, r);
 	}
 	listDiv() {
 		let e = document.createElement("div");
@@ -709,7 +712,7 @@ var o = class {
 		let t = document.createElement("div");
 		return t.dataset.id = e.id, t.id = this.settings.id + "-" + e.id, this.addClasses(t, this.classes.option), t.setAttribute("role", "option"), e.class && e.class.split(" ").forEach((e) => {
 			t.classList.add(e);
-		}), e.style && (t.style.cssText = e.style), this.settings.searchHighlight && this.content.search.input.value.trim() !== "" ? t.innerHTML = this.highlightText(e.html === "" ? e.text : e.html, this.content.search.input.value, this.classes.searchHighlighter) : e.html === "" ? t.textContent = e.text : t.innerHTML = e.html, this.settings.showOptionTooltips && t.textContent && t.setAttribute("title", t.textContent), e.display || this.addClasses(t, this.classes.hide), e.disabled && this.addClasses(t, this.classes.disabled), e.selected && this.settings.hideSelected && this.addClasses(t, this.classes.hide), e.selected ? (this.addClasses(t, this.classes.selected), t.setAttribute("aria-selected", "true"), this.main.main.setAttribute("aria-activedescendant", t.id)) : (this.removeClasses(t, this.classes.selected), t.setAttribute("aria-selected", "false")), t.addEventListener("click", (t) => {
+		}), e.style && (t.style.cssText = e.style), this.settings.searchHighlight && this.content.search.input.value.trim() !== "" ? t.innerHTML = this.highlightText(e.html === "" ? e.text : e.html, this.content.search.input.value, this.classes.searchHighlighter) : e.html === "" ? t.textContent = e.text : t.innerHTML = e.html, this.settings.showOptionTooltips && t.textContent && t.setAttribute("title", t.textContent), e.display || this.addClasses(t, this.classes.hide), e.disabled && this.addClasses(t, this.classes.disabled), e.selected && this.settings.hideSelected && this.addClasses(t, this.classes.hide), e.selected ? (this.addClasses(t, this.classes.selected), t.setAttribute("aria-selected", "true"), this.setActiveDescendant(t)) : (this.removeClasses(t, this.classes.selected), t.setAttribute("aria-selected", "false")), t.addEventListener("click", (t) => {
 			t.preventDefault(), t.stopPropagation();
 			let n = this.store.getSelected(), r = t.currentTarget, i = String(r.dataset.id), a = t.ctrlKey || t.metaKey;
 			if (e.disabled || !this.settings.isMultiple && e.selected && !this.settings.allowDeselect || e.selected && e.mandatory || this.settings.isMultiple && this.settings.maxSelected <= n.length && !e.selected || this.settings.isMultiple && this.settings.minSelected >= n.length && e.selected && !a) return;
@@ -817,6 +820,7 @@ var o = class {
 	preventNativeSelect = null;
 	preventNativeSelectMousedown = null;
 	preventNativeSelectFocus = null;
+	restoreAriaHiddenOnBlur = null;
 	constructor(e) {
 		this.select = e, this.valueChange = this.valueChange.bind(this), this.select.addEventListener("change", this.valueChange, { passive: !0 }), this.observer = new MutationObserver(this.observeCall.bind(this)), this.changeListen(!0);
 	}
@@ -827,12 +831,14 @@ var o = class {
 		this.select.disabled = !0;
 	}
 	hideUI() {
-		this.select.tabIndex = -1, this.select.style.position = "absolute", this.select.style.width = "1px", this.select.style.height = "1px", this.select.style.opacity = "0", this.select.style.overflow = "hidden", this.select.style.pointerEvents = "none", this.select.style.margin = "0", this.select.style.padding = "0", this.select.style.borderWidth = "0", this.select.style.clip = "rect(0 0 0 0)", this.select.setAttribute("aria-hidden", "true"), this.preventNativeSelect || (this.preventNativeSelect = (e) => {
+		this.select.tabIndex = -1, this.select.style.position = "absolute", this.select.style.width = "1px", this.select.style.height = "1px", this.select.style.opacity = "0", this.select.style.overflow = "hidden", this.select.style.pointerEvents = "none", this.select.style.margin = "0", this.select.style.padding = "0", this.select.style.borderWidth = "0", this.select.style.clipPath = "inset(50%)", document.activeElement !== this.select && this.select.setAttribute("aria-hidden", "true"), this.preventNativeSelect || (this.preventNativeSelect = (e) => {
 			e.preventDefault(), e.stopPropagation(), e.stopImmediatePropagation();
 		}, this.preventNativeSelectMousedown = (e) => {
 			e.preventDefault(), e.stopPropagation(), e.stopImmediatePropagation();
 		}, this.preventNativeSelectFocus = (e) => {
-			e.preventDefault(), e.stopPropagation(), e.stopImmediatePropagation();
+			this.select.removeAttribute("aria-hidden"), e.preventDefault(), e.stopPropagation(), e.stopImmediatePropagation();
+		}, this.restoreAriaHiddenOnBlur = () => {
+			this.select.setAttribute("aria-hidden", "true");
 		}, this.select.addEventListener("click", this.preventNativeSelect, {
 			capture: !0,
 			passive: !1
@@ -842,10 +848,13 @@ var o = class {
 		}), this.select.addEventListener("focus", this.preventNativeSelectFocus, {
 			capture: !0,
 			passive: !1
+		}), this.select.addEventListener("blur", this.restoreAriaHiddenOnBlur, {
+			capture: !0,
+			passive: !0
 		}));
 	}
 	showUI() {
-		this.select.removeAttribute("tabindex"), this.select.style.position = "", this.select.style.width = "", this.select.style.height = "", this.select.style.opacity = "", this.select.style.overflow = "", this.select.style.pointerEvents = "", this.select.style.margin = "", this.select.style.padding = "", this.select.style.borderWidth = "", this.select.style.clip = "", this.select.removeAttribute("aria-hidden"), this.preventNativeSelect &&= (this.select.removeEventListener("click", this.preventNativeSelect, { capture: !0 }), null), this.preventNativeSelectMousedown &&= (this.select.removeEventListener("mousedown", this.preventNativeSelectMousedown, { capture: !0 }), null), this.preventNativeSelectFocus &&= (this.select.removeEventListener("focus", this.preventNativeSelectFocus, { capture: !0 }), null);
+		this.select.removeAttribute("tabindex"), this.select.style.position = "", this.select.style.width = "", this.select.style.height = "", this.select.style.opacity = "", this.select.style.overflow = "", this.select.style.pointerEvents = "", this.select.style.margin = "", this.select.style.padding = "", this.select.style.borderWidth = "", this.select.style.clipPath = "", this.select.removeAttribute("aria-hidden"), this.preventNativeSelect &&= (this.select.removeEventListener("click", this.preventNativeSelect, { capture: !0 }), null), this.preventNativeSelectMousedown &&= (this.select.removeEventListener("mousedown", this.preventNativeSelectMousedown, { capture: !0 }), null), this.preventNativeSelectFocus &&= (this.select.removeEventListener("focus", this.preventNativeSelectFocus, { capture: !0 }), null), this.restoreAriaHiddenOnBlur &&= (this.select.removeEventListener("blur", this.restoreAriaHiddenOnBlur, { capture: !0 }), null);
 	}
 	changeListen(e) {
 		this.listen = e, e && this.observer && this.observer.observe(this.select, {
@@ -1041,7 +1050,7 @@ var o = class {
 		});
 	}
 	destroy() {
-		this.changeListen(!1), this.select.removeEventListener("change", this.valueChange), this.preventNativeSelect &&= (this.select.removeEventListener("click", this.preventNativeSelect, { capture: !0 }), null), this.preventNativeSelectMousedown &&= (this.select.removeEventListener("mousedown", this.preventNativeSelectMousedown, { capture: !0 }), null), this.preventNativeSelectFocus &&= (this.select.removeEventListener("focus", this.preventNativeSelectFocus, { capture: !0 }), null), this.observer &&= (this.observer.disconnect(), null), this.removeLabelHandlers(), delete this.select.dataset.id, this.showUI();
+		this.changeListen(!1), this.select.removeEventListener("change", this.valueChange), this.preventNativeSelect &&= (this.select.removeEventListener("click", this.preventNativeSelect, { capture: !0 }), null), this.preventNativeSelectMousedown &&= (this.select.removeEventListener("mousedown", this.preventNativeSelectMousedown, { capture: !0 }), null), this.preventNativeSelectFocus &&= (this.select.removeEventListener("focus", this.preventNativeSelectFocus, { capture: !0 }), null), this.restoreAriaHiddenOnBlur &&= (this.select.removeEventListener("blur", this.restoreAriaHiddenOnBlur, { capture: !0 }), null), this.observer &&= (this.observer.disconnect(), null), this.removeLabelHandlers(), delete this.select.dataset.id, this.showUI();
 	}
 }, d = class {
 	id = "";
@@ -1145,12 +1154,16 @@ var o = class {
 			afterChange: this.events.afterChange
 		};
 		this.render = new l(this.settings, this.cssClasses, this.store, a), this.render.renderValues(), this.render.renderOptions(this.store.getData());
-		let o = this.selectEl.getAttribute("aria-label"), s = this.selectEl.getAttribute("aria-labelledby");
-		if (o) this.render.main.main.setAttribute("aria-label", o);
-		else if (s) this.render.main.main.removeAttribute("aria-label"), this.render.main.main.setAttribute("aria-labelledby", s);
+		let o = this.selectEl.getAttribute("aria-label"), s = this.selectEl.getAttribute("aria-labelledby"), f = [
+			this.render.main.main,
+			this.render.content.search.input,
+			this.render.content.list
+		];
+		if (o) for (let e of f) e.removeAttribute("aria-labelledby"), e.setAttribute("aria-label", o);
+		else if (s) for (let e of f) e.removeAttribute("aria-label"), e.setAttribute("aria-labelledby", s);
 		else if (this.selectEl.labels && this.selectEl.labels.length > 0) {
 			let e = Array.from(this.selectEl.labels).map((e, t) => (e.id ||= `${this.settings.id}-label-${t}`, e.id));
-			this.render.main.main.removeAttribute("aria-label"), this.render.main.main.setAttribute("aria-labelledby", e.join(" "));
+			for (let t of f) t.removeAttribute("aria-label"), t.setAttribute("aria-labelledby", e.join(" "));
 		}
 		this.selectEl.parentNode && this.selectEl.parentNode.insertBefore(this.render.main.main, this.selectEl.nextSibling), window.addEventListener("resize", this.windowResize, !1), this.settings.openPosition === "auto" && window.addEventListener("scroll", this.windowScroll, !1), document.addEventListener("visibilitychange", this.windowVisibilityChange), this.settings.disabled && this.disable(), this.settings.alwaysOpen && this.open(), this.select.setupLabelHandlers(), this.selectEl.slim = this;
 	}

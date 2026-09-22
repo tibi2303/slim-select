@@ -224,14 +224,22 @@ export default class SlimSelect {
     const selectAriaLabel = this.selectEl.getAttribute('aria-label')
     const selectAriaLabelledBy = this.selectEl.getAttribute('aria-labelledby')
 
+    const labelledElements = [
+      this.render.main.main,
+      this.render.content.search.input,
+      this.render.content.list
+    ]
+
     if (selectAriaLabel) {
-      this.render.main.main.setAttribute('aria-label', selectAriaLabel)
+      for (const element of labelledElements) {
+        element.removeAttribute('aria-labelledby')
+        element.setAttribute('aria-label', selectAriaLabel)
+      }
     } else if (selectAriaLabelledBy) {
-      this.render.main.main.removeAttribute('aria-label')
-      this.render.main.main.setAttribute(
-        'aria-labelledby',
-        selectAriaLabelledBy
-      )
+      for (const element of labelledElements) {
+        element.removeAttribute('aria-label')
+        element.setAttribute('aria-labelledby', selectAriaLabelledBy)
+      }
     } else if (this.selectEl.labels && this.selectEl.labels.length > 0) {
       const labelledByIds = Array.from(this.selectEl.labels).map((label, i) => {
         if (!label.id) {
@@ -239,11 +247,10 @@ export default class SlimSelect {
         }
         return label.id
       })
-      this.render.main.main.removeAttribute('aria-label')
-      this.render.main.main.setAttribute(
-        'aria-labelledby',
-        labelledByIds.join(' ')
-      )
+      for (const element of labelledElements) {
+        element.removeAttribute('aria-label')
+        element.setAttribute('aria-labelledby', labelledByIds.join(' '))
+      }
     }
 
     // Add render after original select element

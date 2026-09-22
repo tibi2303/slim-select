@@ -139,6 +139,16 @@ export default class Render {
     }
   }
 
+  private setActiveDescendant(option: HTMLElement | null): void {
+    for (const element of [this.main.main, this.content.search.input]) {
+      if (option?.id) {
+        element.setAttribute('aria-activedescendant', option.id)
+      } else {
+        element.removeAttribute('aria-activedescendant')
+      }
+    }
+  }
+
   // Remove disabled classes
   public enable(): void {
     // Remove disabled class
@@ -162,6 +172,7 @@ export default class Render {
   public open(): void {
     this.main.arrow.path.setAttribute('d', this.classes.arrowOpen)
     this.main.main.setAttribute('aria-expanded', 'true')
+    this.content.search.input.setAttribute('aria-expanded', 'true')
 
     // Clear any pending close animation timeout to prevent race conditions
     if (this.closeAnimationTimeout) {
@@ -199,6 +210,7 @@ export default class Render {
 
   public close(): void {
     this.main.main.setAttribute('aria-expanded', 'false')
+    this.content.search.input.setAttribute('aria-expanded', 'false')
     this.main.arrow.path.setAttribute('d', this.classes.arrowClose)
 
     // Remove open class from content to trigger close animation
@@ -209,7 +221,7 @@ export default class Render {
     this.content.search.input.setAttribute('aria-hidden', 'true')
 
     // Clear active descendant when closed
-    this.main.main.removeAttribute('aria-activedescendant')
+    this.setActiveDescendant(null)
 
     // Remove direction class from main and content after animation is complete
     const animationTiming = this.getAnimationTiming()
@@ -298,8 +310,11 @@ export default class Render {
       this.content.list.setAttribute('aria-multiselectable', 'true')
     }
 
-    // Search input should also control the listbox
+    // Keep combobox semantics on the input that receives focus.
+    this.content.search.input.setAttribute('role', 'combobox')
+    this.content.search.input.setAttribute('aria-haspopup', 'listbox')
     this.content.search.input.setAttribute('aria-controls', listboxId)
+    this.content.search.input.setAttribute('aria-expanded', 'false')
   }
 
   public mainDiv(): Main {
@@ -801,10 +816,11 @@ export default class Render {
 
       value.appendChild(deleteDiv)
 
-      // Add keydown event listener for keyboard navigation (Enter key)
+      // Support both button activation keys.
       deleteDiv.onkeydown = (e) => {
-        if (e.key === 'Enter') {
-          deleteDiv.click() // Trigger the click event when Enter is pressed
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          deleteDiv.click()
         }
       }
     }
@@ -1112,6 +1128,7 @@ export default class Render {
         !options[0].classList.contains(this.classes.getFirst('highlighted'))
       ) {
         this.addClasses(options[0], this.classes.highlighted)
+        this.setActiveDescendant(options[0])
         return
       }
     }
@@ -1171,9 +1188,7 @@ export default class Render {
         this.ensureElementInView(this.content.list, selectOption)
 
         // Update aria-activedescendant for screen readers
-        if (selectOption.id) {
-          this.main.main.setAttribute('aria-activedescendant', selectOption.id)
-        }
+        this.setActiveDescendant(selectOption)
 
         // If selected option has parent classes ss-optgroup with ss-close then click it
         const selectParent = selectOption.parentElement
@@ -1199,9 +1214,7 @@ export default class Render {
     this.addClasses(firstHighlight, this.classes.highlighted)
 
     // Update aria-activedescendant for screen readers
-    if (firstHighlight.id) {
-      this.main.main.setAttribute('aria-activedescendant', firstHighlight.id)
-    }
+    this.setActiveDescendant(firstHighlight)
 
     // Scroll to highlighted one
     this.ensureElementInView(this.content.list, firstHighlight)
@@ -1564,7 +1577,7 @@ export default class Render {
     if (option.selected) {
       this.addClasses(optionEl, this.classes.selected)
       optionEl.setAttribute('aria-selected', 'true')
-      this.main.main.setAttribute('aria-activedescendant', optionEl.id)
+      this.setActiveDescendant(optionEl)
     } else {
       this.removeClasses(optionEl, this.classes.selected)
       optionEl.setAttribute('aria-selected', 'false')

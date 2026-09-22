@@ -52,6 +52,7 @@ export default class Render {
     constructor(settings: Required<Settings>, classes: Required<CssClasses>, store: Store, callbacks: Callbacks);
     private addClasses;
     private removeClasses;
+    private setActiveDescendant;
     enable(): void;
     disable(): void;
     open(): void;
