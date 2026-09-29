@@ -267,6 +267,7 @@ var o = class {
 	lastSelectedOption;
 	lastRenderedOptions;
 	closeAnimationTimeout = null;
+	emptyGroupActions = /* @__PURE__ */ new WeakSet();
 	groupActionsObserver = null;
 	main;
 	content;
@@ -288,10 +289,17 @@ var o = class {
 		for (let t of [this.main.main, this.content.search.input]) e?.id ? t.setAttribute("aria-activedescendant", e.id) : t.removeAttribute("aria-activedescendant");
 	}
 	enable() {
-		this.removeClasses(this.main.main, this.classes.disabled), this.main.main.setAttribute("aria-disabled", "false"), this.content.search.input.disabled = !1;
+		this.removeClasses(this.main.main, this.classes.disabled), this.main.main.setAttribute("aria-disabled", "false"), this.content.search.input.disabled = !1, this.updateButtonDisabledState(!1);
 	}
 	disable() {
-		this.addClasses(this.main.main, this.classes.disabled), this.main.main.setAttribute("aria-disabled", "true"), this.content.search.input.disabled = !0;
+		this.addClasses(this.main.main, this.classes.disabled), this.main.main.setAttribute("aria-disabled", "true"), this.content.search.input.disabled = !0, this.updateButtonDisabledState(!0);
+	}
+	updateButtonDisabledState(e) {
+		this.main.values.querySelectorAll("button").forEach((t) => {
+			t.disabled = e;
+		}), this.content.groupActions.querySelectorAll("button").forEach((t) => {
+			t.disabled = e || this.emptyGroupActions.has(t);
+		});
 	}
 	open() {
 		this.main.arrow.path.setAttribute("d", this.classes.arrowOpen), this.main.main.setAttribute("aria-expanded", "true"), this.content.search.input.setAttribute("aria-expanded", "true"), this.content.groupActions.querySelectorAll("button").forEach((e) => {
@@ -464,7 +472,7 @@ var o = class {
 		let n = document.createElement("div");
 		if (this.addClasses(n, this.classes.valueText), n.textContent = e.text, t.appendChild(n), !e.mandatory) {
 			let n = document.createElement("button");
-			n.type = "button", n.disabled = this.settings.disabled, this.addClasses(n, this.classes.valueDelete), n.setAttribute("tabindex", "0"), n.setAttribute("role", "button"), n.setAttribute("aria-label", `${this.settings.removeText} ${e.text}`), n.onclick = (t) => {
+			n.type = "button", n.disabled = this.settings.disabled, this.addClasses(n, this.classes.valueDelete), n.setAttribute("aria-label", `${this.settings.removeText} ${e.text}`), n.onclick = (t) => {
 				if (t.preventDefault(), t.stopPropagation(), this.settings.disabled) return;
 				let n = !0, r = this.store.getSelectedOptions(), i = r.filter((t) => t.selected && t.id !== e.id, !0);
 				if (!(this.settings.minSelected && i.length < this.settings.minSelected) && (this.callbacks.beforeChange && (n = this.callbacks.beforeChange(i, r) === !0), n)) {
@@ -513,6 +521,24 @@ var o = class {
 			viewport: i,
 			list: o
 		};
+	}
+	createGroupSelectAll(e, t) {
+		let n = document.createElement("button");
+		n.type = "button", n.id = `${t}-select-all`, n.tabIndex = this.settings.isOpen ? 0 : -1, n.setAttribute("aria-controls", t);
+		let r = e.options.map((e) => new o(e)).filter((e) => !e.disabled && !e.mandatory && e.display && !e.placeholder);
+		r.length === 0 && this.emptyGroupActions.add(n), n.disabled = this.settings.disabled || r.length === 0, this.addClasses(n, this.classes.optgroupSelectAll);
+		let i = r.length > 0 && r.every((e) => e.selected);
+		n.setAttribute("aria-pressed", String(i)), i && this.addClasses(n, this.classes.selected);
+		let a = document.createElement("span");
+		return a.textContent = e.selectAllText, n.setAttribute("aria-label", `${e.selectAllText}: ${e.label}`), n.appendChild(a), n.addEventListener("click", (e) => {
+			if (e.preventDefault(), e.stopPropagation(), this.settings.disabled) return;
+			let t = this.store.getSelectedOptions(), a = new Set(r.map((e) => e.id)), o = i ? t.filter((e) => !a.has(e.id)) : [...t, ...r.filter((e) => !t.some((t) => t.id === e.id))];
+			if (o.length < this.settings.minSelected || this.settings.maxSelected && o.length > this.settings.maxSelected || this.callbacks.beforeChange && this.callbacks.beforeChange(o, t) === !1) return;
+			let s = document.activeElement === n;
+			this.callbacks.setSelected(o.map((e) => e.id), !0), s && document.getElementById(n.id)?.focus();
+		}), n.addEventListener("keydown", (e) => {
+			(e.key === "Enter" || e.key === " ") && (e.preventDefault(), e.stopPropagation(), n.click());
+		}), n;
 	}
 	positionGroupActions() {
 		for (let e of this.content.groupActions.querySelectorAll("button")) {
@@ -689,24 +715,10 @@ var o = class {
 				this.addClasses(i, this.classes.optgroupLabelText), i.textContent = n.label, i.id = `${e.id}-label`, e.setAttribute("aria-labelledby", i.id), r.appendChild(i);
 				let a = document.createElement("div");
 				if (this.addClasses(a, this.classes.optgroupActions), r.appendChild(a), this.settings.isMultiple && n.selectAll) {
-					let t = document.createElement("button");
-					t.type = "button", t.id = `${e.id}-select-all`, t.tabIndex = this.settings.isOpen ? 0 : -1, t.setAttribute("aria-controls", e.id);
-					let r = n.options.map((e) => new o(e)).filter((e) => !e.disabled && !e.mandatory && e.display && !e.placeholder);
-					t.disabled = this.settings.disabled || r.length === 0, this.addClasses(t, this.classes.optgroupSelectAll);
-					let i = r.length > 0 && r.every((e) => e.selected);
-					t.setAttribute("aria-pressed", String(i)), i && this.addClasses(t, this.classes.selected);
-					let s = document.createElement("span");
-					s.textContent = n.selectAllText, t.setAttribute("aria-label", `${n.selectAllText}: ${n.label}`), t.appendChild(s), t.addEventListener("click", (e) => {
-						if (e.preventDefault(), e.stopPropagation(), this.settings.disabled) return;
-						let n = this.store.getSelectedOptions(), a = new Set(r.map((e) => e.id)), o = i ? n.filter((e) => !a.has(e.id)) : [...n, ...r.filter((e) => !n.some((t) => t.id === e.id))];
-						if (o.length < this.settings.minSelected || this.settings.maxSelected && o.length > this.settings.maxSelected || this.callbacks.beforeChange && this.callbacks.beforeChange(o, n) !== !0) return;
-						let s = document.activeElement === t;
-						this.callbacks.setSelected(o.map((e) => e.id), !0), s && document.getElementById(t.id)?.focus();
-					}), t.addEventListener("keydown", (e) => {
-						(e.key === "Enter" || e.key === " ") && (e.preventDefault(), e.stopPropagation(), t.click());
-					}), this.content.groupActions.appendChild(t);
-					let c = document.createElement("span");
-					c.className = "ss-selectall-slot", c.setAttribute("aria-hidden", "true"), c.textContent = n.selectAllText, a.appendChild(c);
+					let t = this.createGroupSelectAll(n, e.id);
+					this.content.groupActions.appendChild(t);
+					let r = document.createElement("span");
+					r.className = "ss-selectall-slot", r.setAttribute("aria-hidden", "true"), r.textContent = n.selectAllText, a.appendChild(r);
 				}
 				if (n.closable !== "off") {
 					let t = document.createElement("div");

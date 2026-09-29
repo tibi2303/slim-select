@@ -48,6 +48,7 @@ export default class Render {
     private lastSelectedOption;
     private lastRenderedOptions;
     private closeAnimationTimeout;
+    private emptyGroupActions;
     private groupActionsObserver;
     main: Main;
     content: Content;
@@ -58,6 +59,7 @@ export default class Render {
     private setActiveDescendant;
     enable(): void;
     disable(): void;
+    private updateButtonDisabledState;
     open(): void;
     close(): void;
     private getAnimationTiming;
@@ -71,6 +73,7 @@ export default class Render {
     private renderMultipleValues;
     multipleValue(option: Option): HTMLDivElement;
     contentDiv(): Content;
+    private createGroupSelectAll;
     private positionGroupActions;
     private announce;
     moveContent(): void;

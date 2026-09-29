@@ -620,7 +620,7 @@ describe('SlimSelect Accessibility', () => {
 
       const deleteButtons = document.querySelectorAll('.ss-value-delete')
       expect(deleteButtons.length).toBe(2)
-      expect(deleteButtons[0].getAttribute('role')).toBe('button')
+      expect(deleteButtons[0].tagName).toBe('BUTTON')
       expect(deleteButtons[0].getAttribute('aria-label')).toBe('Remove Italy')
       expect(deleteButtons[1].getAttribute('aria-label')).toBe('Remove France')
     })

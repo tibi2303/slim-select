@@ -68,6 +68,7 @@ export default class Render {
   // Timeout tracking for cleanup
   private closeAnimationTimeout: ReturnType<typeof setTimeout> | null = null
 
+  private emptyGroupActions = new WeakSet<HTMLButtonElement>()
   private groupActionsObserver: ResizeObserver | null = null
 
   // Elements
@@ -161,6 +162,7 @@ export default class Render {
 
     // Set search input to "enabled"
     this.content.search.input.disabled = false
+    this.updateButtonDisabledState(false)
   }
 
   // Set disabled classes
@@ -171,6 +173,16 @@ export default class Render {
 
     // Set search input to disabled
     this.content.search.input.disabled = true
+    this.updateButtonDisabledState(true)
+  }
+
+  private updateButtonDisabledState(disabled: boolean): void {
+    this.main.values.querySelectorAll('button').forEach((button) => {
+      button.disabled = disabled
+    })
+    this.content.groupActions.querySelectorAll('button').forEach((button) => {
+      button.disabled = disabled || this.emptyGroupActions.has(button)
+    })
   }
 
   public open(): void {
@@ -753,20 +765,18 @@ export default class Render {
 
     // Only add deletion if the option is not mandatory
     if (!option.mandatory) {
-      // Create delete div element
-      const deleteDiv = document.createElement('button')
-      deleteDiv.type = 'button'
-      deleteDiv.disabled = this.settings.disabled
-      this.addClasses(deleteDiv, this.classes.valueDelete)
-      deleteDiv.setAttribute('tabindex', '0') // Make the div focusable for tab navigation
-      deleteDiv.setAttribute('role', 'button')
-      deleteDiv.setAttribute(
+      // Create a native remove button
+      const removeButton = document.createElement('button')
+      removeButton.type = 'button'
+      removeButton.disabled = this.settings.disabled
+      this.addClasses(removeButton, this.classes.valueDelete)
+      removeButton.setAttribute(
         'aria-label',
         `${this.settings.removeText} ${option.text}`
       )
 
       // Add delete onclick event
-      deleteDiv.onclick = (e: Event) => {
+      removeButton.onclick = (e: Event) => {
         e.preventDefault()
         e.stopPropagation()
 
@@ -839,16 +849,16 @@ export default class Render {
       )
       deletePath.setAttribute('d', this.classes.optionDelete)
       deleteSvg.appendChild(deletePath)
-      deleteDiv.appendChild(deleteSvg)
+      removeButton.appendChild(deleteSvg)
 
-      value.appendChild(deleteDiv)
+      value.appendChild(removeButton)
 
       // Support both button activation keys.
-      deleteDiv.onkeydown = (e) => {
+      removeButton.onkeydown = (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
           e.stopPropagation()
-          deleteDiv.click()
+          removeButton.click()
         }
       }
     }
@@ -924,6 +934,91 @@ export default class Render {
       viewport: viewport,
       list: list
     }
+  }
+
+  private createGroupSelectAll(
+    group: Optgroup,
+    groupId: string
+  ): HTMLButtonElement {
+    // Use a native toggle button with a group-specific accessible name.
+    const selectAll = document.createElement('button')
+    selectAll.type = 'button'
+    selectAll.id = `${groupId}-select-all`
+    selectAll.tabIndex = this.settings.isOpen ? 0 : -1
+    selectAll.setAttribute('aria-controls', groupId)
+    const selectable = group.options
+      .map((option) => new Option(option))
+      .filter(
+        (option) =>
+          !option.disabled &&
+          !option.mandatory &&
+          option.display &&
+          !option.placeholder
+      )
+    if (selectable.length === 0) this.emptyGroupActions.add(selectAll)
+    selectAll.disabled = this.settings.disabled || selectable.length === 0
+    this.addClasses(selectAll, this.classes.optgroupSelectAll)
+
+    const allSelected =
+      selectable.length > 0 && selectable.every((option) => option.selected)
+    selectAll.setAttribute('aria-pressed', String(allSelected))
+
+    // Add class if all selected
+    if (allSelected) {
+      this.addClasses(selectAll, this.classes.selected)
+    }
+
+    // Add select all text span
+    const selectAllText = document.createElement('span')
+    selectAllText.textContent = group.selectAllText
+    selectAll.setAttribute(
+      'aria-label',
+      `${group.selectAllText}: ${group.label}`
+    )
+    selectAll.appendChild(selectAllText)
+
+    // Add click event listener to select all
+    selectAll.addEventListener('click', (e: MouseEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+
+      if (this.settings.disabled) return
+      const current = this.store.getSelectedOptions()
+      const ids = new Set(selectable.map((option) => option.id))
+      const next = allSelected
+        ? current.filter((option) => !ids.has(option.id))
+        : [
+            ...current,
+            ...selectable.filter(
+              (option) => !current.some((selected) => selected.id === option.id)
+            )
+          ]
+      if (
+        next.length < this.settings.minSelected ||
+        (this.settings.maxSelected && next.length > this.settings.maxSelected)
+      )
+        return
+      if (
+        this.callbacks.beforeChange &&
+        this.callbacks.beforeChange(next, current) === false
+      )
+        return
+      const focused = document.activeElement === selectAll
+      this.callbacks.setSelected(
+        next.map((option) => option.id),
+        true
+      )
+      if (focused) document.getElementById(selectAll.id)?.focus()
+    })
+
+    selectAll.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        event.stopPropagation()
+        selectAll.click()
+      }
+    })
+    return selectAll
   }
 
   private positionGroupActions(): void {
@@ -1430,85 +1525,12 @@ export default class Render {
         this.addClasses(optgroupActions, this.classes.optgroupActions)
         optgroupLabel.appendChild(optgroupActions)
 
-        // If selectByGroup is true and isMultiple then add click event to label
+        // Add the group selection toggle for multiselects
         if (this.settings.isMultiple && d.selectAll) {
-          // Use a native toggle button with a group-specific accessible name.
-          const selectAll = document.createElement('button')
-          selectAll.type = 'button'
-          selectAll.id = `${optgroupEl.id}-select-all`
-          selectAll.tabIndex = this.settings.isOpen ? 0 : -1
-          selectAll.setAttribute('aria-controls', optgroupEl.id)
-          const selectable = d.options
-            .map((option) => new Option(option))
-            .filter(
-              (option) =>
-                !option.disabled &&
-                !option.mandatory &&
-                option.display &&
-                !option.placeholder
-            )
-          selectAll.disabled = this.settings.disabled || selectable.length === 0
-          this.addClasses(selectAll, this.classes.optgroupSelectAll)
-
-          const allSelected =
-            selectable.length > 0 &&
-            selectable.every((option) => option.selected)
-          selectAll.setAttribute('aria-pressed', String(allSelected))
-
-          // Add class if all selected
-          if (allSelected) {
-            this.addClasses(selectAll, this.classes.selected)
-          }
-
-          // Add select all text span
-          const selectAllText = document.createElement('span')
-          selectAllText.textContent = d.selectAllText
-          selectAll.setAttribute('aria-label', `${d.selectAllText}: ${d.label}`)
-          selectAll.appendChild(selectAllText)
-
-          // Add click event listener to select all
-          selectAll.addEventListener('click', (e: MouseEvent) => {
-            e.preventDefault()
-            e.stopPropagation()
-
-            if (this.settings.disabled) return
-            const current = this.store.getSelectedOptions()
-            const ids = new Set(selectable.map((option) => option.id))
-            const next = allSelected
-              ? current.filter((option) => !ids.has(option.id))
-              : [
-                  ...current,
-                  ...selectable.filter(
-                    (option) =>
-                      !current.some((selected) => selected.id === option.id)
-                  )
-                ]
-            if (
-              next.length < this.settings.minSelected ||
-              (this.settings.maxSelected &&
-                next.length > this.settings.maxSelected)
-            )
-              return
-            if (
-              this.callbacks.beforeChange &&
-              this.callbacks.beforeChange(next, current) !== true
-            )
-              return
-            const focused = document.activeElement === selectAll
-            this.callbacks.setSelected(
-              next.map((option) => option.id),
-              true
-            )
-            if (focused) document.getElementById(selectAll.id)?.focus()
-          })
-
-          selectAll.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault()
-              event.stopPropagation()
-              selectAll.click()
-            }
-          })
+          const selectAll = this.createGroupSelectAll(d, optgroupEl.id)
+          // Keep interactive buttons outside the listbox so assistive technology
+          // can expose them independently of its options. The hidden slot reserves
+          // space in the group heading; positionGroupActions aligns the button.
           this.content.groupActions.appendChild(selectAll)
           const slot = document.createElement('span')
           slot.className = 'ss-selectall-slot'
