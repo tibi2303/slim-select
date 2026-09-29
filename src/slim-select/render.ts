@@ -2025,16 +2025,17 @@ export default class Render {
       const overflow = contentRight - viewportRight
       const currentLeft = parseFloat(this.content.main.style.left) || 0
 
-      if (this.settings.contentPosition === 'fixed') {
-        const newLeft = Math.max(padding, currentLeft - overflow)
-        this.content.main.style.left = newLeft + 'px'
-      } else {
-        const newLeft = Math.max(
-          window.scrollX + padding,
-          currentLeft - overflow
-        )
-        this.content.main.style.left = newLeft + 'px'
-      }
+      const minimumLeft =
+        this.settings.contentPosition === 'fixed'
+          ? padding
+          : window.scrollX + padding
+      // A trigger can sit inside the preferred viewport padding. Correcting
+      // right overflow must never push its dropdown farther to the right.
+      const newLeft = Math.min(
+        currentLeft,
+        Math.max(minimumLeft, currentLeft - overflow)
+      )
+      this.content.main.style.left = newLeft + 'px'
     }
 
     // First rAF: layout done (width/min-width applied). Second rAF: catch scrollbar etc.

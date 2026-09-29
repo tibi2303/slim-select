@@ -808,14 +808,8 @@ var u = class {
 		let i = window.innerWidth - 20, a = () => {
 			let e = this.content.main.getBoundingClientRect().right;
 			if (e <= i) return;
-			let t = e - i, n = parseFloat(this.content.main.style.left) || 0;
-			if (this.settings.contentPosition === "fixed") {
-				let e = Math.max(20, n - t);
-				this.content.main.style.left = e + "px";
-			} else {
-				let e = Math.max(window.scrollX + 20, n - t);
-				this.content.main.style.left = e + "px";
-			}
+			let t = e - i, n = parseFloat(this.content.main.style.left) || 0, r = this.settings.contentPosition === "fixed" ? 20 : window.scrollX + 20, a = Math.min(n, Math.max(r, n - t));
+			this.content.main.style.left = a + "px";
 		};
 		requestAnimationFrame(() => {
 			a(), requestAnimationFrame(a);
