@@ -79,4 +79,40 @@ describe('Dropdown search keyboard interaction', () => {
     expect(slim.getSelected().sort()).toEqual(['be', 'it'])
     expect(document.activeElement).toBe(input)
   })
+  test.each([
+    ['ArrowDown', 'Belgium'],
+    ['ArrowUp', 'Czechia']
+  ])('%s returns from the group button to %s', (key, text) => {
+    const input = create()
+    slim.open()
+    press(input, 'ArrowDown')
+    press(input, 'Tab')
+    const button = document.activeElement as HTMLButtonElement
+    expect(press(button, key).defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(input)
+    expect(
+      document.getElementById(input.getAttribute('aria-activedescendant')!)
+        ?.textContent
+    ).toBe(text)
+    press(input, 'Enter')
+    expect(slim.getSelected()).toContain(text === 'Belgium' ? 'be' : 'cz')
+  })
+
+  test('the group button changes its visible and accessible labels after toggling', () => {
+    const input = create()
+    slim.open()
+    press(input, 'Tab')
+    press(document.activeElement as HTMLElement, 'Enter')
+    let button = document.querySelector<HTMLButtonElement>('.ss-selectall')!
+    expect(button.textContent).toBe('Deselect All')
+    expect(button.getAttribute('aria-label')).toBe('Deselect All: Group 1')
+    expect(document.querySelector('.ss-selectall-slot')?.textContent).toBe(
+      'Deselect All'
+    )
+    expect(document.activeElement).toBe(button)
+    press(button, 'Enter')
+    button = document.querySelector<HTMLButtonElement>('.ss-selectall')!
+    expect(button.textContent).toBe('Select All')
+    expect(slim.getSelected()).toEqual(['it'])
+  })
 })

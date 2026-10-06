@@ -21,6 +21,7 @@ export declare class Optgroup {
     label: string;
     selectAll: boolean;
     selectAllText: string;
+    deselectAllText: string;
     closable: 'off' | 'open' | 'close';
     options: Partial<Option>[];
     constructor(optgroup: Partial<Optgroup>);

@@ -900,6 +900,31 @@ export default class Render {
       if (event.key === 'Escape') {
         event.preventDefault()
         this.callbacks.close()
+      } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        const button = (event.target as HTMLElement).closest('button')
+        const groupId = button?.getAttribute('aria-controls')
+        const options = this.getOptions(true, true, true).filter(
+          (option) => option.closest('[role="group"]')?.id === groupId
+        )
+        const option =
+          event.key === 'ArrowDown' ? options[0] : options[options.length - 1]
+        if (!option) return
+        this.content.list
+          .querySelectorAll('.' + this.classes.getFirst('highlighted'))
+          .forEach((previous) => {
+            this.removeClasses(
+              previous as HTMLElement,
+              this.classes.highlighted
+            )
+          })
+        const target = this.settings.showSearch
+          ? this.content.search.input
+          : this.main.main
+        target.focus({ preventScroll: true })
+        this.addClasses(option, this.classes.highlighted)
+        this.setActiveDescendant(option)
+        this.ensureElementInView(this.content.viewport, option)
       } else if (event.key === 'Tab') {
         const buttons = Array.from(
           groupActions.querySelectorAll('button:not(:disabled)')
@@ -971,11 +996,9 @@ export default class Render {
 
     // Add select all text span
     const selectAllText = document.createElement('span')
-    selectAllText.textContent = group.selectAllText
-    selectAll.setAttribute(
-      'aria-label',
-      `${group.selectAllText}: ${group.label}`
-    )
+    const actionText = allSelected ? group.deselectAllText : group.selectAllText
+    selectAllText.textContent = actionText
+    selectAll.setAttribute('aria-label', `${actionText}: ${group.label}`)
     selectAll.appendChild(selectAllText)
 
     // Add click event listener to select all
@@ -1517,7 +1540,7 @@ export default class Render {
           const slot = document.createElement('span')
           slot.className = 'ss-selectall-slot'
           slot.setAttribute('aria-hidden', 'true')
-          slot.textContent = d.selectAllText
+          slot.textContent = selectAll.textContent
           optgroupActions.appendChild(slot)
         }
 

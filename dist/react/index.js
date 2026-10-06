@@ -110,10 +110,11 @@ var f = class {
 	label;
 	selectAll;
 	selectAllText;
+	deselectAllText;
 	closable;
 	options;
 	constructor(e) {
-		if (this.id = !e.id || e.id === "" ? s() : e.id, this.label = e.label || "", this.selectAll = e.selectAll === void 0 ? !1 : e.selectAll, this.selectAllText = e.selectAllText || "Select All", this.closable = e.closable || "off", this.options = [], e.options) for (let t of e.options) this.options.push(new f(t));
+		if (this.id = !e.id || e.id === "" ? s() : e.id, this.label = e.label || "", this.selectAll = e.selectAll === void 0 ? !1 : e.selectAll, this.selectAllText = e.selectAllText || "Select All", this.deselectAllText = e.deselectAllText || "Deselect All", this.closable = e.closable || "off", this.options = [], e.options) for (let t of e.options) this.options.push(new f(t));
 	}
 }, m = class {
 	selectType = "single";
@@ -510,7 +511,14 @@ var f = class {
 		let a = document.createElement("div");
 		a.className = "ss-options-body", i.appendChild(a), e.appendChild(i), a.appendChild(r), r.addEventListener("keydown", (e) => {
 			if (e.key === "Escape") e.preventDefault(), this.callbacks.close();
-			else if (e.key === "Tab") {
+			else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+				e.preventDefault();
+				let t = e.target.closest("button")?.getAttribute("aria-controls"), n = this.getOptions(!0, !0, !0).filter((e) => e.closest("[role=\"group\"]")?.id === t), r = e.key === "ArrowDown" ? n[0] : n[n.length - 1];
+				if (!r) return;
+				this.content.list.querySelectorAll("." + this.classes.getFirst("highlighted")).forEach((e) => {
+					this.removeClasses(e, this.classes.highlighted);
+				}), (this.settings.showSearch ? this.content.search.input : this.main.main).focus({ preventScroll: !0 }), this.addClasses(r, this.classes.highlighted), this.setActiveDescendant(r), this.ensureElementInView(this.content.viewport, r);
+			} else if (e.key === "Tab") {
 				let t = Array.from(r.querySelectorAll("button:not(:disabled)")), n = t.indexOf(e.target);
 				e.shiftKey && n === 0 ? (e.preventDefault(), (this.settings.showSearch ? this.content.search.input : this.main.main).focus()) : !e.shiftKey && n === t.length - 1 && this.callbacks.close();
 			}
@@ -532,8 +540,8 @@ var f = class {
 		r.length === 0 && this.emptyGroupActions.add(n), n.disabled = this.settings.disabled || r.length === 0, this.addClasses(n, this.classes.optgroupSelectAll);
 		let i = r.length > 0 && r.every((e) => e.selected);
 		n.setAttribute("aria-pressed", String(i)), i && this.addClasses(n, this.classes.selected);
-		let a = document.createElement("span");
-		return a.textContent = e.selectAllText, n.setAttribute("aria-label", `${e.selectAllText}: ${e.label}`), n.appendChild(a), n.addEventListener("click", (e) => {
+		let a = document.createElement("span"), o = i ? e.deselectAllText : e.selectAllText;
+		return a.textContent = o, n.setAttribute("aria-label", `${o}: ${e.label}`), n.appendChild(a), n.addEventListener("click", (e) => {
 			if (e.preventDefault(), e.stopPropagation(), this.settings.disabled) return;
 			let t = this.store.getSelectedOptions(), a = new Set(r.map((e) => e.id)), o = i ? t.filter((e) => !a.has(e.id)) : [...t, ...r.filter((e) => !t.some((t) => t.id === e.id))];
 			if (o.length < this.settings.minSelected || this.settings.maxSelected && o.length > this.settings.maxSelected || this.callbacks.beforeChange && this.callbacks.beforeChange(o, t) === !1) return;
@@ -711,7 +719,7 @@ var f = class {
 					let t = this.createGroupSelectAll(n, e.id);
 					this.content.groupActions.appendChild(t);
 					let r = document.createElement("span");
-					r.className = "ss-selectall-slot", r.setAttribute("aria-hidden", "true"), r.textContent = n.selectAllText, a.appendChild(r);
+					r.className = "ss-selectall-slot", r.setAttribute("aria-hidden", "true"), r.textContent = t.textContent, a.appendChild(r);
 				}
 				if (n.closable !== "off") {
 					let t = document.createElement("div");
@@ -923,6 +931,7 @@ var f = class {
 			label: e.label,
 			selectAll: e.dataset ? e.dataset.selectall === "true" : !1,
 			selectAllText: e.dataset ? e.dataset.selectalltext : "Select all",
+			deselectAllText: e.dataset?.deselectalltext,
 			closable: e.dataset ? e.dataset.closable : "off",
 			options: []
 		}, n = e.childNodes;
