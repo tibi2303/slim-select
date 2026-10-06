@@ -277,7 +277,10 @@ var f = class {
 	content;
 	classes;
 	constructor(e, t, n, r) {
-		this.store = n, this.settings = e, this.classes = t, this.callbacks = r, this.lastSelectedOption = null, this.lastRenderedOptions = [], this.main = this.mainDiv(), this.content = this.contentDiv(), this.updateClassStyles(), this.updateAriaAttributes(), this.settings.contentPosition !== "relative" && (this.content.main.style.top = "-9999px", this.content.main.style.left = "-9999px", this.content.main.style.margin = "0", this.content.main.style.width = "auto"), this.settings.contentLocation && this.settings.contentLocation.appendChild(this.content.main);
+		this.store = n, this.settings = e, this.classes = t, this.callbacks = r, this.lastSelectedOption = null, this.lastRenderedOptions = [], this.main = this.mainDiv(), this.content = this.contentDiv(), this.settings.showSearch && (this.main.main.classList.add("ss-editable"), this.main.main.tabIndex = -1, this.main.main.insertBefore(this.content.search.main, this.main.arrow.main), this.content.search.input.tabIndex = 0, this.content.search.input.removeAttribute("aria-hidden"), this.main.main.addEventListener("focusout", (e) => {
+			let t = e.relatedTarget;
+			t && !this.main.main.contains(t) && !this.content.main.contains(t) && this.callbacks.close("blur");
+		})), this.updateClassStyles(), this.updateAriaAttributes(), this.settings.contentPosition !== "relative" && (this.content.main.style.top = "-9999px", this.content.main.style.left = "-9999px", this.content.main.style.margin = "0", this.content.main.style.width = "auto"), this.settings.contentLocation && this.settings.contentLocation.appendChild(this.content.main);
 	}
 	addClasses(e, t) {
 		if (!t || t.trim() === "") return;
@@ -290,7 +293,7 @@ var f = class {
 		for (let t of n) e.classList.remove(t.trim());
 	}
 	setActiveDescendant(e) {
-		for (let t of [this.main.main, this.content.search.input]) e?.id ? t.setAttribute("aria-activedescendant", e.id) : t.removeAttribute("aria-activedescendant");
+		for (let t of [this.settings.showSearch ? this.content.search.input : this.main.main]) e?.id ? t.setAttribute("aria-activedescendant", e.id) : t.removeAttribute("aria-activedescendant");
 	}
 	enable() {
 		this.removeClasses(this.main.main, this.classes.disabled), this.main.main.setAttribute("aria-disabled", "false"), this.content.search.input.disabled = !1, this.updateButtonDisabledState(!1);
@@ -306,21 +309,18 @@ var f = class {
 		});
 	}
 	open() {
-		this.main.arrow.path.setAttribute("d", this.classes.arrowOpen), this.main.main.setAttribute("aria-expanded", "true"), this.content.search.input.setAttribute("aria-expanded", "true"), this.content.groupActions.querySelectorAll("button").forEach((e) => {
+		this.main.arrow.path.setAttribute("d", this.classes.arrowOpen), this.settings.showSearch || this.main.main.setAttribute("aria-expanded", "true"), this.content.search.input.setAttribute("aria-expanded", "true"), this.content.groupActions.querySelectorAll("button").forEach((e) => {
 			e.tabIndex = 0;
 		}), this.closeAnimationTimeout &&= (clearTimeout(this.closeAnimationTimeout), null);
 		let e = this.settings.openPosition === "up" ? this.classes.dirAbove : this.classes.dirBelow;
-		this.addClasses(this.main.main, e), this.addClasses(this.content.main, e), this.addClasses(this.content.main, this.classes.contentOpen), this.content.search.input.removeAttribute("aria-hidden"), this.moveContent();
-		let t = this.store.getSelectedOptions();
-		if (t.length) {
-			let e = t[t.length - 1].id, n = this.content.list.querySelector("[data-id=\"" + e + "\"]");
-			n && this.ensureElementInView(this.content.viewport, n);
-		}
+		this.addClasses(this.main.main, e), this.addClasses(this.content.main, e), this.addClasses(this.content.main, this.classes.contentOpen), this.content.search.input.removeAttribute("aria-hidden"), this.moveContent(), this.content.viewport.scrollTop = 0;
 	}
 	close() {
-		this.main.main.setAttribute("aria-expanded", "false"), this.content.search.input.setAttribute("aria-expanded", "false"), this.content.groupActions.querySelectorAll("button").forEach((e) => {
+		this.settings.showSearch || this.main.main.setAttribute("aria-expanded", "false"), this.content.search.input.setAttribute("aria-expanded", "false"), this.content.groupActions.querySelectorAll("button").forEach((e) => {
 			e.tabIndex = -1;
-		}), this.main.arrow.path.setAttribute("d", this.classes.arrowClose), this.removeClasses(this.content.main, this.classes.contentOpen), this.content.search.input.setAttribute("aria-hidden", "true"), this.setActiveDescendant(null);
+		}), this.main.arrow.path.setAttribute("d", this.classes.arrowClose), this.removeClasses(this.content.main, this.classes.contentOpen), this.settings.showSearch || this.content.search.input.setAttribute("aria-hidden", "true"), this.setActiveDescendant(null), this.content.list.querySelectorAll("." + this.classes.getFirst("highlighted")).forEach((e) => {
+			this.removeClasses(e, this.classes.highlighted);
+		});
 		let e = this.getAnimationTiming();
 		this.closeAnimationTimeout = setTimeout(() => {
 			this.removeClasses(this.main.main, this.classes.dirAbove), this.removeClasses(this.main.main, this.classes.dirBelow), this.removeClasses(this.content.main, this.classes.dirAbove), this.removeClasses(this.content.main, this.classes.dirBelow), this.closeAnimationTimeout = null;
@@ -335,34 +335,40 @@ var f = class {
 		return 200;
 	}
 	updateClassStyles() {
-		if (this.main.main.className = "", this.main.main.removeAttribute("style"), this.content.main.className = "", this.content.main.removeAttribute("style"), this.addClasses(this.main.main, this.classes.main), this.addClasses(this.content.main, this.classes.content), this.settings.style !== "" && (this.main.main.style.cssText = this.settings.style, this.content.main.style.cssText = this.settings.style), this.settings.class.length) for (let e of this.settings.class) e.trim() !== "" && (this.main.main.classList.add(e.trim()), this.content.main.classList.add(e.trim()));
+		if (this.main.main.className = "", this.main.main.removeAttribute("style"), this.content.main.className = "", this.content.main.removeAttribute("style"), this.addClasses(this.main.main, this.classes.main), this.settings.showSearch && this.main.main.classList.add("ss-editable"), this.addClasses(this.content.main, this.classes.content), this.settings.style !== "" && (this.main.main.style.cssText = this.settings.style, this.content.main.style.cssText = this.settings.style), this.settings.class.length) for (let e of this.settings.class) e.trim() !== "" && (this.main.main.classList.add(e.trim()), this.content.main.classList.add(e.trim()));
 		(this.settings.contentPosition === "relative" || this.settings.contentPosition === "fixed") && this.content.main.classList.add("ss-" + this.settings.contentPosition);
 	}
 	updateAriaAttributes() {
 		let e = this.content.list.id;
-		this.main.main.role = "combobox", this.main.main.setAttribute("aria-haspopup", "listbox"), this.main.main.setAttribute("aria-controls", e), this.main.main.setAttribute("aria-expanded", "false"), this.content.list.setAttribute("role", "listbox"), this.content.list.setAttribute("aria-label", this.settings.ariaLabel + " listbox"), this.settings.isMultiple && this.content.list.setAttribute("aria-multiselectable", "true"), this.content.search.input.setAttribute("role", "combobox"), this.content.search.input.setAttribute("aria-haspopup", "listbox"), this.content.search.input.setAttribute("aria-controls", e), this.content.search.input.setAttribute("aria-expanded", "false");
+		this.settings.showSearch || (this.main.main.role = "combobox"), this.settings.showSearch || this.main.main.setAttribute("aria-haspopup", "listbox"), this.settings.showSearch || this.main.main.setAttribute("aria-controls", e), this.settings.showSearch || this.main.main.setAttribute("aria-expanded", "false"), this.content.list.setAttribute("role", "listbox"), this.content.list.setAttribute("aria-label", this.settings.ariaLabel + " listbox"), this.settings.isMultiple && this.content.list.setAttribute("aria-multiselectable", "true"), this.settings.showSearch && this.content.search.input.setAttribute("role", "combobox"), this.content.search.input.setAttribute("aria-haspopup", "listbox"), this.content.search.input.setAttribute("aria-controls", e), this.content.search.input.setAttribute("aria-expanded", "false");
 	}
 	mainDiv() {
 		let e = document.createElement("div");
-		e.dataset.id = this.settings.id, e.setAttribute("aria-label", this.settings.ariaLabel), e.tabIndex = 0, e.onkeydown = (e) => {
-			switch (e.key) {
+		e.dataset.id = this.settings.id, e.setAttribute("aria-label", this.settings.ariaLabel), e.tabIndex = 0, e.onkeydown = (t) => {
+			if (t.target !== e) return !0;
+			switch (t.key) {
 				case "ArrowUp":
-				case "ArrowDown": return this.callbacks.open(), e.key === "ArrowDown" ? this.highlight("down") : this.highlight("up"), !1;
+				case "ArrowDown": return this.callbacks.open(), t.key === "ArrowDown" ? this.highlight("down") : this.highlight("up"), !1;
 				case "Tab":
-					if (!e.shiftKey && this.settings.isOpen) {
+					if (!t.shiftKey && this.settings.isOpen) {
 						let e = this.content.groupActions.querySelector("button:not(:disabled)");
 						if (e) return e.focus(), !1;
 					}
 					return this.callbacks.close(), !0;
 				case "Enter":
 				case " ":
+					if (!this.settings.isOpen) return this.callbacks.open(), !1;
 					this.callbacks.open();
-					let t = this.content.list.querySelector("." + this.classes.getFirst("highlighted"));
-					return t && t.click(), !1;
+					let e = this.content.list.querySelector("." + this.classes.getFirst("highlighted"));
+					return e && e.click(), !1;
 				case "Escape": return this.callbacks.close(), !1;
 			}
-			return e.key.length === 1 && this.callbacks.open(), !0;
+			return t.key.length === 1 && this.callbacks.open(), !0;
 		}, e.onclick = (e) => {
+			if (this.settings.showSearch) {
+				this.settings.disabled || (this.callbacks.open(), this.content.search.input.focus({ preventScroll: !0 }));
+				return;
+			}
 			this.settings.disabled || (this.settings.isOpen ? this.callbacks.close() : this.callbacks.open());
 		};
 		let t = document.createElement("div");
@@ -406,7 +412,7 @@ var f = class {
 		};
 	}
 	mainFocus(e) {
-		e !== "click" && this.main.main.focus({ preventScroll: !0 });
+		e !== "click" && e !== "blur" && (this.settings.showSearch ? this.content.search.input : this.main.main).focus({ preventScroll: !0 });
 	}
 	placeholder() {
 		let e = this.store.filter((e) => e.placeholder, !1), t = this.settings.placeholderText;
@@ -460,7 +466,7 @@ var f = class {
 			let i = e[r], a = i.getAttribute("data-id");
 			a && (t.filter((e) => e.id === a, !1).length || n.push(i));
 		}
-		for (let e of n) e.contains(document.activeElement) && this.main.main.focus({ preventScroll: !0 }), e.inert = !0, e.setAttribute("aria-hidden", "true"), this.addClasses(e, this.classes.valueOut), setTimeout(() => {
+		for (let e of n) e.contains(document.activeElement) && this.mainFocus(null), e.inert = !0, e.setAttribute("aria-hidden", "true"), this.addClasses(e, this.classes.valueOut), setTimeout(() => {
 			this.main.values.hasChildNodes() && this.main.values.contains(e) && this.main.values.removeChild(e);
 		}, 100);
 		e = this.main.values.childNodes;
@@ -574,12 +580,12 @@ var f = class {
 			main: e,
 			input: t
 		};
-		if (this.settings.showSearch || (this.addClasses(e, this.classes.hide), t.readOnly = !0), t.type = "search", t.placeholder = this.settings.searchPlaceholder, t.tabIndex = -1, t.setAttribute("aria-label", this.settings.searchPlaceholder), t.setAttribute("aria-autocomplete", "list"), t.setAttribute("autocapitalize", "off"), t.setAttribute("autocomplete", "off"), t.setAttribute("autocorrect", "off"), t.setAttribute("aria-hidden", "true"), t.oninput = l((e) => {
-			this.callbacks.search(e.target.value);
+		if (this.settings.showSearch || (this.addClasses(e, this.classes.hide), t.readOnly = !0), t.type = "search", t.placeholder = this.settings.searchPlaceholder, t.tabIndex = -1, t.setAttribute("aria-label", this.settings.searchPlaceholder), t.setAttribute("aria-autocomplete", "list"), t.setAttribute("autocapitalize", "off"), t.setAttribute("autocomplete", "off"), t.setAttribute("autocorrect", "off"), t.setAttribute("aria-hidden", "true"), t.onclick = () => this.callbacks.open(), t.oninput = l((e) => {
+			this.callbacks.open(), this.callbacks.search(e.target.value);
 		}, 100), t.onkeydown = (e) => {
 			switch (e.key) {
 				case "ArrowUp":
-				case "ArrowDown": return e.key === "ArrowDown" ? this.highlight("down") : this.highlight("up"), !1;
+				case "ArrowDown": return this.callbacks.open(), e.key === "ArrowDown" ? this.highlight("down") : this.highlight("up"), !1;
 				case "Tab":
 					if (!e.shiftKey && this.settings.isOpen) {
 						let e = this.content.groupActions.querySelector("button:not(:disabled)");
@@ -587,12 +593,10 @@ var f = class {
 					}
 					return this.callbacks.close(), !0;
 				case "Escape": return this.callbacks.close(), !1;
-				case " ":
-					let t = this.content.list.querySelector("." + this.classes.getFirst("highlighted"));
-					return t ? (t.click(), !1) : !0;
 				case "Enter":
-					let r = this.content.list.querySelector("." + this.classes.getFirst("highlighted"));
-					return r ? (r.click(), !1) : this.callbacks.addable ? (n.click(), !1) : !0;
+					if (!this.settings.isOpen) return this.callbacks.open(), !1;
+					let t = this.content.list.querySelector("." + this.classes.getFirst("highlighted"));
+					return t ? (t.click(), !1) : (this.callbacks.addable && n.click(), !1);
 			}
 			return !0;
 		}, e.appendChild(t), this.callbacks.addable) {
@@ -648,14 +652,7 @@ var f = class {
 			this.addClasses(t[0], this.classes.highlighted), this.setActiveDescendant(t[0]);
 			return;
 		}
-		let n = !1;
-		for (let e of t) e.classList.contains(this.classes.getFirst("highlighted")) && (n = !0);
-		if (!n) {
-			for (let e of t) if (e.classList.contains(this.classes.getFirst("selected"))) {
-				this.addClasses(e, this.classes.highlighted);
-				break;
-			}
-		}
+		for (let e of t) e.classList.contains(this.classes.getFirst("highlighted"));
 		for (let n = 0; n < t.length; n++) if (t[n].classList.contains(this.classes.getFirst("highlighted"))) {
 			let r = t[n];
 			this.removeClasses(r, this.classes.highlighted);
@@ -673,8 +670,8 @@ var f = class {
 			}
 			return;
 		}
-		let r = t[e === "down" ? 0 : t.length - 1];
-		this.addClasses(r, this.classes.highlighted), this.setActiveDescendant(r), this.ensureElementInView(this.content.viewport, r);
+		let n = t[e === "down" ? 0 : t.length - 1];
+		this.addClasses(n, this.classes.highlighted), this.setActiveDescendant(n), this.ensureElementInView(this.content.viewport, n);
 	}
 	listDiv() {
 		let e = document.createElement("div");

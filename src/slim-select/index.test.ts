@@ -936,7 +936,7 @@ describe('SlimSelect Module', () => {
       }).not.toThrow()
     })
 
-    test('clicking main div closes SlimSelect when wrapped in label', async () => {
+    test('clicking editable main div keeps SlimSelect open when wrapped in label', async () => {
       document.body.innerHTML = `
         <label>
           Select a Country
@@ -976,8 +976,8 @@ describe('SlimSelect Module', () => {
       )
       await new Promise((r) => setTimeout(r, 300)) // after animation
 
-      // SlimSelect should be closed
-      expect(slim.settings.isOpen).toBe(false)
+      // Clicking within the editable control keeps the popup open.
+      expect(slim.settings.isOpen).toBe(true)
 
       slim.destroy()
     })
@@ -1022,7 +1022,7 @@ describe('SlimSelect Module', () => {
       slim.destroy()
     })
 
-    test('clicking main div toggles when wrapped in label', async () => {
+    test('clicking editable main div repeatedly keeps the input focused', async () => {
       document.body.innerHTML = `
         <label>
           Select a Country
@@ -1050,12 +1050,12 @@ describe('SlimSelect Module', () => {
       await new Promise((r) => setTimeout(r, 10))
       expect(slim.settings.isOpen).toBe(true)
 
-      // Click main div again to close
+      // Clicking again keeps the popup open
       mainDiv.dispatchEvent(
         new MouseEvent('click', { bubbles: true, cancelable: true })
       )
       await new Promise((r) => setTimeout(r, 10))
-      expect(slim.settings.isOpen).toBe(false)
+      expect(slim.settings.isOpen).toBe(true)
 
       // Click main div again to open
       mainDiv.dispatchEvent(

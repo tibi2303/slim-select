@@ -130,7 +130,9 @@ describe('render module', () => {
       expect(render.main.arrow.path.getAttribute('d')).toBe(
         render.classes.arrowOpen
       )
-      expect(render.main.main.getAttribute('aria-expanded')).toBe('true')
+      expect(render.content.search.input.getAttribute('aria-expanded')).toBe(
+        'true'
+      )
       expect(
         render.content.main.classList.contains(render.classes.contentOpen)
       ).toBe(true)
@@ -154,7 +156,9 @@ describe('render module', () => {
       expect(render.main.arrow.path.getAttribute('d')).toBe(
         render.classes.arrowClose
       )
-      expect(render.main.main.getAttribute('aria-expanded')).toBe('false')
+      expect(render.content.search.input.getAttribute('aria-expanded')).toBe(
+        'false'
+      )
       expect(
         render.content.main.classList.contains(render.classes.contentOpen)
       ).toBe(false)
@@ -220,12 +224,17 @@ describe('render module', () => {
     test('sets correct aria attributes', () => {
       render.updateAriaAttributes()
 
-      expect(render.main.main.role).toBe('combobox')
-      expect(render.main.main.getAttribute('aria-haspopup')).toBe('listbox')
-      expect(render.main.main.getAttribute('aria-controls')).toBe(
+      expect(render.main.main.hasAttribute('role')).toBe(false)
+      expect(render.content.search.input.role).toBe('combobox')
+      expect(render.content.search.input.getAttribute('aria-haspopup')).toBe(
+        'listbox'
+      )
+      expect(render.content.search.input.getAttribute('aria-controls')).toBe(
         render.content.list.id
       )
-      expect(render.main.main.getAttribute('aria-expanded')).toBe('false')
+      expect(render.content.search.input.getAttribute('aria-expanded')).toBe(
+        'false'
+      )
       expect(render.content.list.getAttribute('role')).toBe('listbox')
       expect(render.content.list.getAttribute('aria-label')).toContain(
         'listbox'
@@ -233,7 +242,12 @@ describe('render module', () => {
     })
   })
 
-  describe('mainDiv', () => {
+  describe('mainDiv without search', () => {
+    beforeEach(() => {
+      render.settings.showSearch = false
+      render.main = render.mainDiv()
+      render.updateAriaAttributes()
+    })
     test('correct HTML element gets created', () => {
       const main = render.main.main
 
@@ -388,7 +402,7 @@ describe('render module', () => {
       focusMock = vi.fn(() => {}) as (
         options?: FocusOptions | undefined
       ) => void
-      render.main.main.focus = focusMock
+      render.content.search.input.focus = focusMock
     })
 
     test('mainFocus does nothing if the event is click', () => {
@@ -762,7 +776,7 @@ describe('render module', () => {
       expect(addableMock).not.toHaveBeenCalled()
     })
 
-    test('enter and space call addable when defined', () => {
+    test('Enter calls addable when the popup is open', () => {
       const addableMock = vi.fn((s: string) => ({
         text: s,
         value: s.toLowerCase()
@@ -773,6 +787,7 @@ describe('render module', () => {
       // recreate search because we have added the addable callback
       render.content.search = render.searchDiv()
 
+      render.settings.isOpen = true
       render.content.search.input.value = 'Search'
 
       render.content.search.input.dispatchEvent(
@@ -832,6 +847,7 @@ describe('render module', () => {
       render.renderOptions(render.store.getDataOptions())
 
       // Set search value
+      render.settings.isOpen = true
       render.content.search.input.value = 'NewItem'
 
       // Do NOT highlight any option (user just types and presses Enter)
@@ -849,6 +865,7 @@ describe('render module', () => {
 
   describe('searchFocus', () => {
     test('search is focused', () => {
+      document.body.appendChild(render.main.main)
       expect(document.activeElement).not.toBe(render.content.search.input)
 
       render.searchFocus()
@@ -1060,7 +1077,7 @@ describe('render module', () => {
       ).toBe(true)
     })
 
-    test('highlight next option on down after selected option when no options is highlighted', () => {
+    test('highlight first option on down when no option is highlighted', () => {
       render.renderOptions(
         render.store.partialToFullData([
           {
@@ -1079,7 +1096,7 @@ describe('render module', () => {
       render.highlight('down')
 
       expect(
-        render.getOptions()[1].classList.contains(render.classes.highlighted)
+        render.getOptions()[0].classList.contains(render.classes.highlighted)
       ).toBe(true)
     })
 
@@ -1111,7 +1128,7 @@ describe('render module', () => {
         render.store.partialToFullData([
           {
             text: 'opt0',
-            selected: true
+            class: render.classes.highlighted
           },
           {
             label: 'opt group',
@@ -1145,7 +1162,7 @@ describe('render module', () => {
             options: [
               {
                 text: 'opt1',
-                selected: true
+                class: render.classes.highlighted
               }
             ]
           },

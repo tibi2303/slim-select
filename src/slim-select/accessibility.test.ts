@@ -163,8 +163,8 @@ describe('SlimSelect Accessibility', () => {
       expect(controls).toBeTruthy()
       expect(controls).toContain('-list')
 
-      // Note: aria-expanded should be on the combobox (main.main), not the input
-      // Inputs can't have aria-expanded per ARIA spec
+      expect(searchInput?.getAttribute('role')).toBe('combobox')
+      expect(searchInput?.getAttribute('aria-expanded')).toBe('true')
     })
 
     test('listbox only contains valid child roles', () => {
@@ -277,7 +277,9 @@ describe('SlimSelect Accessibility', () => {
 
       slim.open()
 
-      const main = document.querySelector('.ss-main') as HTMLElement
+      const main = document.querySelector(
+        '.ss-search input'
+      ) as HTMLInputElement
 
       // Arrow down should highlight
       main.dispatchEvent(
@@ -300,7 +302,9 @@ describe('SlimSelect Accessibility', () => {
       slim.open()
       expect(slim.settings.isOpen).toBe(true)
 
-      const main = document.querySelector('.ss-main') as HTMLElement
+      const main = document.querySelector(
+        '.ss-search input'
+      ) as HTMLInputElement
       main.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
       )
@@ -326,9 +330,8 @@ describe('SlimSelect Accessibility', () => {
         'input[type="search"]'
       ) as HTMLInputElement
 
-      // Search input has tabindex=-1 because it's programmatically focused
-      // This is intentional - focus is managed by SlimSelect
-      expect(searchInput.tabIndex).toBe(-1)
+      // The persistent input is the normal Tab entry point.
+      expect(searchInput.tabIndex).toBe(0)
 
       // Should accept keyboard input when programmatically focused
       searchInput.focus()
@@ -346,7 +349,9 @@ describe('SlimSelect Accessibility', () => {
         select: select
       })
 
-      const main = document.querySelector('.ss-main') as HTMLElement
+      const main = document.querySelector(
+        '.ss-search input'
+      ) as HTMLInputElement
 
       // Focus and open
       main.focus()
@@ -355,9 +360,8 @@ describe('SlimSelect Accessibility', () => {
       // Close
       slim.close()
 
-      // Focus should return to main
-      // Note: This might need adjustment based on actual implementation
-      expect(document.activeElement?.className).toContain('ss-main')
+      // Closing keeps focus on the persistent editable combobox.
+      expect(document.activeElement).toBe(main)
     })
 
     test('focus is trapped within dropdown when open', () => {
@@ -422,7 +426,9 @@ describe('SlimSelect Accessibility', () => {
 
       slim.open()
 
-      const main = document.querySelector('.ss-main') as HTMLElement
+      const main = document.querySelector(
+        '.ss-search input'
+      ) as HTMLInputElement
 
       // Simulate arrow down key
       main.dispatchEvent(
@@ -453,9 +459,11 @@ describe('SlimSelect Accessibility', () => {
 
       slim.open()
 
-      const main = document.querySelector('.ss-main') as HTMLElement
+      const main = document.querySelector(
+        '.ss-search input'
+      ) as HTMLInputElement
 
-      // First arrow down - starts from selected (Apple by default)
+      // First arrow down starts at the first option.
       main.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })
       )
@@ -492,7 +500,9 @@ describe('SlimSelect Accessibility', () => {
 
       slim.open()
 
-      const main = document.querySelector('.ss-main') as HTMLElement
+      const main = document.querySelector(
+        '.ss-search input'
+      ) as HTMLInputElement
 
       // Highlight an option
       main.dispatchEvent(
@@ -507,7 +517,7 @@ describe('SlimSelect Accessibility', () => {
       expect(main.getAttribute('aria-activedescendant')).toBeNull()
     })
 
-    test('search input is hidden from screen readers when closed', () => {
+    test('search input remains visible to screen readers when closed', () => {
       select.innerHTML = `
         <option value="1">Option 1</option>
       `
@@ -521,16 +531,16 @@ describe('SlimSelect Accessibility', () => {
 
       const searchInput = document.querySelector('input[type="search"]')
 
-      // Should be hidden when closed
-      expect(searchInput?.getAttribute('aria-hidden')).toBe('true')
+      // Remains accessible when closed
+      expect(searchInput?.getAttribute('aria-hidden')).toBeNull()
 
       // Should be visible when opened
       slim.open()
       expect(searchInput?.getAttribute('aria-hidden')).toBeNull()
 
-      // Should be hidden again when closed
+      // Remains accessible after closing
       slim.close()
-      expect(searchInput?.getAttribute('aria-hidden')).toBe('true')
+      expect(searchInput?.getAttribute('aria-hidden')).toBeNull()
     })
 
     test('aria-label or aria-labelledby is present for accessibility', () => {
