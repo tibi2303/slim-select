@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import SlimSelect from './index'
 
-describe('Persistent editable combobox', () => {
+describe('Dropdown search keyboard interaction', () => {
   let slim: SlimSelect
 
   afterEach(() => {
@@ -36,15 +36,15 @@ describe('Persistent editable combobox', () => {
     return event
   }
 
-  test('one visible input is the Tab entry point and keeps focus during navigation', () => {
+  test('search stays inside the dropdown and receives focus after opening', () => {
     const input = create()
-    expect(document.querySelectorAll('[role="combobox"]')).toHaveLength(1)
-    expect(input.closest('.ss-main')).toBe(slim.render.main.main)
-    expect(input.tabIndex).toBe(0)
-    expect(slim.render.main.main.tabIndex).toBe(-1)
-    expect(input.hasAttribute('aria-hidden')).toBe(false)
-    input.focus()
-    press(input, 'ArrowDown')
+    expect(input.closest('.ss-content')).toBe(slim.render.content.main)
+    expect(input.closest('.ss-main')).toBeNull()
+    expect(input.tabIndex).toBe(-1)
+    expect(slim.render.main.main.tabIndex).toBe(0)
+    expect(input.hasAttribute('aria-hidden')).toBe(true)
+    slim.render.main.main.focus()
+    press(slim.render.main.main, 'ArrowDown')
     expect(document.activeElement).toBe(input)
     expect(input.getAttribute('aria-expanded')).toBe('true')
     expect(
@@ -57,13 +57,13 @@ describe('Persistent editable combobox', () => {
 
   test('Enter reopens after Escape without selecting a stale option', () => {
     const input = create()
-    input.focus()
-    press(input, 'ArrowDown')
+    slim.render.main.main.focus()
+    press(slim.render.main.main, 'ArrowDown')
     press(input, 'Escape')
-    expect(document.activeElement).toBe(input)
+    expect(document.activeElement).toBe(slim.render.main.main)
     expect(input.getAttribute('aria-expanded')).toBe('false')
-    expect(input.hasAttribute('aria-hidden')).toBe(false)
-    press(input, 'Enter')
+    expect(input.hasAttribute('aria-hidden')).toBe(true)
+    press(slim.render.main.main, 'Enter')
     expect(input.getAttribute('aria-expanded')).toBe('true')
     expect(input.hasAttribute('aria-activedescendant')).toBe(false)
     expect(slim.getSelected()).toEqual(['it'])
@@ -71,8 +71,8 @@ describe('Persistent editable combobox', () => {
 
   test('Space types normally and Enter selects the active option', () => {
     const input = create()
-    input.focus()
-    press(input, 'ArrowDown')
+    slim.render.main.main.focus()
+    press(slim.render.main.main, 'ArrowDown')
     expect(press(input, ' ').defaultPrevented).toBe(false)
     expect(slim.getSelected()).toEqual(['it'])
     press(input, 'Enter')

@@ -3,7 +3,7 @@ import { default as Store, Optgroup, Option } from './store';
 import { default as CssClasses } from './classes';
 export interface Callbacks {
     open: () => void;
-    close: (eventType?: string | null) => void;
+    close: () => void;
     addable?: (value: string) => Promise<Partial<Option> | string> | Partial<Option> | string | false | undefined | null | Error;
     setSelected: (value: string | string[], runAfterChange: boolean) => void;
     addOption: (option: Option) => void;

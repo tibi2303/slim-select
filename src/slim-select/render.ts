@@ -5,7 +5,7 @@ import CssClasses from './classes'
 
 export interface Callbacks {
   open: () => void
-  close: (eventType?: string | null) => void
+  close: () => void
   addable?: (
     value: string
   ) =>
@@ -93,26 +93,6 @@ export default class Render {
 
     this.main = this.mainDiv()
     this.content = this.contentDiv()
-    if (this.settings.showSearch) {
-      this.main.main.classList.add('ss-editable')
-      this.main.main.tabIndex = -1
-      this.main.main.insertBefore(
-        this.content.search.main,
-        this.main.arrow.main
-      )
-      this.content.search.input.tabIndex = 0
-      this.content.search.input.removeAttribute('aria-hidden')
-      this.main.main.addEventListener('focusout', (event) => {
-        const next = event.relatedTarget as Node | null
-        if (
-          next &&
-          !this.main.main.contains(next) &&
-          !this.content.main.contains(next)
-        ) {
-          this.callbacks.close('blur')
-        }
-      })
-    }
 
     // Add classes and styles to main/content
     this.updateClassStyles()
@@ -165,9 +145,7 @@ export default class Render {
   }
 
   private setActiveDescendant(option: HTMLElement | null): void {
-    for (const element of [
-      this.settings.showSearch ? this.content.search.input : this.main.main
-    ]) {
+    for (const element of [this.main.main, this.content.search.input]) {
       if (option?.id) {
         element.setAttribute('aria-activedescendant', option.id)
       } else {
@@ -209,8 +187,7 @@ export default class Render {
 
   public open(): void {
     this.main.arrow.path.setAttribute('d', this.classes.arrowOpen)
-    if (!this.settings.showSearch)
-      this.main.main.setAttribute('aria-expanded', 'true')
+    this.main.main.setAttribute('aria-expanded', 'true')
     this.content.search.input.setAttribute('aria-expanded', 'true')
     this.content.groupActions.querySelectorAll('button').forEach((button) => {
       button.tabIndex = 0
@@ -237,13 +214,12 @@ export default class Render {
     // move the content in to the right location
     this.moveContent()
 
-    // Start with the group context and actions visible on every opening.
+    // Keep the first group and its actions visible on every opening.
     this.content.viewport.scrollTop = 0
   }
 
   public close(): void {
-    if (!this.settings.showSearch)
-      this.main.main.setAttribute('aria-expanded', 'false')
+    this.main.main.setAttribute('aria-expanded', 'false')
     this.content.search.input.setAttribute('aria-expanded', 'false')
     this.content.groupActions.querySelectorAll('button').forEach((button) => {
       button.tabIndex = -1
@@ -255,8 +231,7 @@ export default class Render {
     this.removeClasses(this.content.main, this.classes.contentOpen)
 
     // Hide search from screen readers when closed
-    if (!this.settings.showSearch)
-      this.content.search.input.setAttribute('aria-hidden', 'true')
+    this.content.search.input.setAttribute('aria-hidden', 'true')
 
     // Clear active descendant when closed
     this.setActiveDescendant(null)
@@ -305,7 +280,6 @@ export default class Render {
 
     // Make sure main/content has its base class
     this.addClasses(this.main.main, this.classes.main)
-    if (this.settings.showSearch) this.main.main.classList.add('ss-editable')
     this.addClasses(this.content.main, this.classes.content)
 
     // Add styles
@@ -338,13 +312,10 @@ export default class Render {
     const listboxId = this.content.list.id
 
     // Main combobox
-    if (!this.settings.showSearch) this.main.main.role = 'combobox'
-    if (!this.settings.showSearch)
-      this.main.main.setAttribute('aria-haspopup', 'listbox')
-    if (!this.settings.showSearch)
-      this.main.main.setAttribute('aria-controls', listboxId)
-    if (!this.settings.showSearch)
-      this.main.main.setAttribute('aria-expanded', 'false')
+    this.main.main.role = 'combobox'
+    this.main.main.setAttribute('aria-haspopup', 'listbox')
+    this.main.main.setAttribute('aria-controls', listboxId)
+    this.main.main.setAttribute('aria-expanded', 'false')
 
     this.content.list.setAttribute('role', 'listbox')
     this.content.list.setAttribute(
@@ -358,8 +329,7 @@ export default class Render {
     }
 
     // Keep combobox semantics on the input that receives focus.
-    if (this.settings.showSearch)
-      this.content.search.input.setAttribute('role', 'combobox')
+    this.content.search.input.setAttribute('role', 'combobox')
     this.content.search.input.setAttribute('aria-haspopup', 'listbox')
     this.content.search.input.setAttribute('aria-controls', listboxId)
     this.content.search.input.setAttribute('aria-expanded', 'false')
@@ -383,7 +353,7 @@ export default class Render {
     // This is to allow for normal selecting
     // when you may not have a search bar
     main.onkeydown = (e: KeyboardEvent): boolean => {
-      if (e.target !== main) return true
+      if (e.target !== main || this.settings.disabled) return true
       // Convert above if else statemets to switch
       switch (e.key) {
         case 'ArrowUp':
@@ -433,13 +403,6 @@ export default class Render {
 
     // Add onclick for main div
     main.onclick = (e: Event): void => {
-      if (this.settings.showSearch) {
-        if (!this.settings.disabled) {
-          this.callbacks.open()
-          this.content.search.input.focus({ preventScroll: true })
-        }
-        return
-      }
       // Dont do anything if disabled
       if (this.settings.disabled) {
         return
@@ -573,11 +536,8 @@ export default class Render {
     // Need for prevent refocus the element if event is not keyboard event.
     // For example if event is mouse click or tachpad click this condition prevent refocus on element
     // because click by mouse change focus position and not need return focus to element.
-    if (eventType !== 'click' && eventType !== 'blur') {
-      const target = this.settings.showSearch
-        ? this.content.search.input
-        : this.main.main
-      target.focus({ preventScroll: true })
+    if (eventType !== 'click') {
+      this.main.main.focus({ preventScroll: true })
     }
   }
 
@@ -747,7 +707,7 @@ export default class Render {
     // Loop through and remove
     for (const n of removeNodes) {
       if (n.contains(document.activeElement)) {
-        this.mainFocus(null)
+        this.main.main.focus({ preventScroll: true })
       }
       n.inert = true
       n.setAttribute('aria-hidden', 'true')
@@ -1138,9 +1098,7 @@ export default class Render {
     // Hide from screen readers by default (shown when opened)
     input.setAttribute('aria-hidden', 'true')
 
-    input.onclick = () => this.callbacks.open()
     input.oninput = debounce((e: Event) => {
-      this.callbacks.open()
       this.callbacks.search((e.target as HTMLInputElement).value)
     }, 100)
 
@@ -1150,7 +1108,6 @@ export default class Render {
       switch (e.key) {
         case 'ArrowUp':
         case 'ArrowDown':
-          this.callbacks.open()
           e.key === 'ArrowDown' ? this.highlight('down') : this.highlight('up')
           return false
         case 'Tab':
@@ -1173,10 +1130,6 @@ export default class Render {
           this.callbacks.close()
           return false
         case 'Enter':
-          if (!this.settings.isOpen) {
-            this.callbacks.open()
-            return false
-          }
           // Check if there's a highlighted option first
           const highlightedEnter = this.content.list.querySelector(
             '.' + this.classes.getFirst('highlighted')
@@ -1190,7 +1143,7 @@ export default class Render {
             addable.click()
             return false
           }
-          return false
+          return true
       }
 
       return true // Allow normal typing

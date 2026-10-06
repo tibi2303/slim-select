@@ -130,9 +130,7 @@ describe('render module', () => {
       expect(render.main.arrow.path.getAttribute('d')).toBe(
         render.classes.arrowOpen
       )
-      expect(render.content.search.input.getAttribute('aria-expanded')).toBe(
-        'true'
-      )
+      expect(render.main.main.getAttribute('aria-expanded')).toBe('true')
       expect(
         render.content.main.classList.contains(render.classes.contentOpen)
       ).toBe(true)
@@ -156,9 +154,7 @@ describe('render module', () => {
       expect(render.main.arrow.path.getAttribute('d')).toBe(
         render.classes.arrowClose
       )
-      expect(render.content.search.input.getAttribute('aria-expanded')).toBe(
-        'false'
-      )
+      expect(render.main.main.getAttribute('aria-expanded')).toBe('false')
       expect(
         render.content.main.classList.contains(render.classes.contentOpen)
       ).toBe(false)
@@ -224,7 +220,7 @@ describe('render module', () => {
     test('sets correct aria attributes', () => {
       render.updateAriaAttributes()
 
-      expect(render.main.main.hasAttribute('role')).toBe(false)
+      expect(render.main.main.role).toBe('combobox')
       expect(render.content.search.input.role).toBe('combobox')
       expect(render.content.search.input.getAttribute('aria-haspopup')).toBe(
         'listbox'
@@ -232,9 +228,7 @@ describe('render module', () => {
       expect(render.content.search.input.getAttribute('aria-controls')).toBe(
         render.content.list.id
       )
-      expect(render.content.search.input.getAttribute('aria-expanded')).toBe(
-        'false'
-      )
+      expect(render.main.main.getAttribute('aria-expanded')).toBe('false')
       expect(render.content.list.getAttribute('role')).toBe('listbox')
       expect(render.content.list.getAttribute('aria-label')).toContain(
         'listbox'
@@ -402,7 +396,7 @@ describe('render module', () => {
       focusMock = vi.fn(() => {}) as (
         options?: FocusOptions | undefined
       ) => void
-      render.content.search.input.focus = focusMock
+      render.main.main.focus = focusMock
     })
 
     test('mainFocus does nothing if the event is click', () => {
